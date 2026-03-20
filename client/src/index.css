@@ -1,0 +1,67 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Neutral, professional palette with soft blue/green accents */
+  --background: 210 20% 98%;
+  --foreground: 220 20% 20%;
+  
+  /* Primary: Professional Blue */
+  --primary: 215 90% 48%;
+  --primary-foreground: 210 40% 98%;
+  
+  /* Secondary: Soft Slate */
+  --secondary: 210 20% 94%;
+  --secondary-foreground: 220 20% 30%;
+  
+  /* Accent: Repair/Success Green */
+  --accent: 150 60% 45%;
+  --accent-foreground: 0 0% 100%;
+  
+  /* Destructive: Soft Red */
+  --destructive: 0 70% 60%;
+  --destructive-foreground: 210 40% 98%;
+  
+  /* UI Elements */
+  --muted: 210 20% 92%;
+  --muted-foreground: 215 15% 50%;
+  --card: 0 0% 100%;
+  --card-foreground: 220 20% 20%;
+  --border: 220 15% 90%;
+  --input: 220 15% 90%;
+  --ring: 215 90% 48%;
+  
+  --radius: 0.5rem;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', sans-serif;
+    @apply tracking-tight font-bold text-foreground;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/20 rounded-full hover:bg-muted-foreground/40 transition-colors;
+}
+
+/* Glassmorphism utilities */
+.glass {
+  @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-sm;
+}

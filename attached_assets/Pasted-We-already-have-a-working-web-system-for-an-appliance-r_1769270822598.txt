@@ -1,0 +1,81 @@
+We already have a working web system for an appliance repair shop (oficina de eletrodomésticos) running on Replit. The unified "Nova Ordem de Serviço" flow is implemented and working.
+
+Now implement the features below with MINIMAL rewrites. Extend existing code. Do NOT break existing data. Keep the UI clean, modern, and in Brazilian Portuguese. Prefer browser printing and link-based sharing (no paid services). If something already exists, reuse it.
+
+========================
+A) THERMAL PRINTING (Entrada + Etiqueta)
+========================
+1) Add "Nota de Entrada (Térmica)" printing as a receipt/coupon for thermal printers.
+   - Must support 58mm and 80mm widths via query param: ?size=58 or ?size=80 (default 80).
+   - Dedicated route: /print/receipt/:osId?size=58|80
+   - Use print CSS optimized for thermal roll: no margins, monospace-friendly, proper line wraps, large OS number, and clear sections.
+   - Content (receipt):
+     * Nome da oficina (configurable in settings/env), telefone/WhatsApp
+     * Número da OS (bem grande)
+     * Data/hora de entrada
+     * Cliente: nome e telefone
+     * Aparelho: tipo, marca, modelo (e serial se existir)
+     * Defeito relatado
+     * Observações (se houver)
+     * Termos curtos (ex.: prazo varia conforme diagnóstico; guardar comprovante; etc.)
+     * Link de acompanhamento + QR Code (see section D)
+   - Must print correctly using the browser print dialog; do NOT require ESC/POS direct integration.
+
+2) Add "Etiqueta (Térmica)" for sticking to the appliance.
+   - Dedicated route: /print/label/:osId?size=58|80
+   - Very compact layout:
+     * OS number huge
+     * Customer short name
+     * Appliance summary (type/brand/model)
+     * Entry date
+     * QR Code for tracking page
+   - Print CSS optimized for thermal.
+
+3) Add buttons in:
+   - OS details page
+   - After OS creation success state (in the unified flow)
+   Buttons:
+   - "Imprimir Nota de Entrada (Térmica)"
+   - "Imprimir Etiqueta (Térmica)"
+
+========================
+B) SHARE / SEND (WhatsApp + optional Email)
+========================
+4) Add "Enviar Nota/Link por WhatsApp" on OS details:
+   - Opens wa.me with a pre-filled message including:
+     * OS number
+     * Entry date
+     * Current status
+     * Tracking link (/acompanhamento/:token)
+   - Keep the message short and professional.
+
+5) Add "Enviar por Email (opcional)":
+   - If no email backend is configured, use mailto: with pre-filled subject/body.
+   - Optionally support SMTP via env vars (optional, safe, documented), but do NOT make the app dependent on it.
+
+6) Add "Enviar Orçamento" (WhatsApp + Email) buttons (see section F).
+
+========================
+C) CHECK-OUT / FINALIZAÇÃO (Baixa na saída)
+========================
+7) Add a "Dar baixa / Finalizar OS" workflow in OS details.
+   - Modal with options:
+     a) "Consertado e entregue"
+     b) "Não autorizado (retirado pelo cliente)"
+     c) "Autorizado para descarte"
+   - Record:
+     * final_status
+     * exit_date/time
+     * who finalized (user)
+     * delivered_to (optional)
+     * notes
+   - After finalization, OS becomes read-only for non-admin (admin can still correct if needed).
+   - Provide filters in list: Abertas / Finalizadas / Por status.
+
+========================
+D) CUSTOMER TRACKING (Acompanhamento pelo cliente)
+========================
+8) Create a PUBLIC tracking page (no login) using an unguessable token:
+   - Route: /acompanhamento/:token
+   - Shows ONLY:
+     * OS numbe*

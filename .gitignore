@@ -1,0 +1,22 @@
+# dependências
+node_modules
+
+# build
+dist
+build
+
+# arquivos de ambiente e segredos
+.env
+
+# arquivos locais do sistema
+.local
+.config
+.DS_Store
+
+# backups e dumps
+backup.sql
+*.tar.gz
+
+# arquivos específicos do projeto
+server/public
+vite.config.ts.*

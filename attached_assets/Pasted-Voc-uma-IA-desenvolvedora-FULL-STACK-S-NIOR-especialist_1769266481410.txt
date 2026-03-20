@@ -1,0 +1,165 @@
+Você é uma IA desenvolvedora FULL STACK SÊNIOR, especialista em:
+- UX/UI moderno
+- Sistemas de gestão (ERP leve)
+- Aplicações web responsivas
+- Código limpo, documentado e profissional
+
+MISSÃO:
+Criar um SISTEMA WEB COMPLETO para uma OFICINA DE ELETRODOMÉSTICOS,
+100% funcional, intuitivo, bonito, rápido e gratuito para hospedar.
+
+━━━━━━━━━━━━━━━━━━━━━━
+🎯 OBJETIVO DO SISTEMA
+━━━━━━━━━━━━━━━━━━━━━━
+Um sistema online para gerenciar uma oficina de eletrodomésticos, permitindo:
+- Cadastro de clientes
+- Cadastro de aparelhos
+- Ordens de serviço
+- Status do reparo
+- Valores
+- Histórico
+- Acesso fácil até para quem não entende nada de tecnologia
+
+━━━━━━━━━━━━━━━━━━━━━━
+🖥️ TIPO DE APLICAÇÃO
+━━━━━━━━━━━━━━━━━━━━━━
+- Web App (funciona em celular, tablet e computador)
+- Interface moderna estilo:
+  - Notion
+  - Mercado Livre
+  - Apps bancários modernos
+- Navegação simples (poucos cliques)
+
+━━━━━━━━━━━━━━━━━━━━━━
+🎨 DESIGN (OBRIGATÓRIO)
+━━━━━━━━━━━━━━━━━━━━━━
+- Visual LIMPO e PROFISSIONAL
+- Cores neutras (cinza, branco, azul ou verde suave)
+- Ícones claros
+- Botões grandes
+- Fontes legíveis
+- Nada poluído
+- Layout responsivo
+- UX pensado para mecânico/técnico, não para programador
+
+━━━━━━━━━━━━━━━━━━━━━━
+📦 FUNCIONALIDADES
+━━━━━━━━━━━━━━━━━━━━━━
+
+🔐 AUTENTICAÇÃO
+- Tela de login simples
+- Usuário e senha
+- Apenas 1 nível de usuário (admin)
+
+👤 CLIENTES
+- Nome
+- Telefone (WhatsApp)
+- Endereço
+- Observações
+- Histórico automático de serviços
+
+🔧 APARELHOS
+- Tipo (geladeira, máquina de lavar, micro-ondas, TV, etc.)
+- Marca
+- Modelo
+- Número de série (opcional)
+- Cliente vinculado
+
+🧾 ORDEM DE SERVIÇO
+- Número da OS (automático)
+- Cliente
+- Aparelho
+- Defeito relatado
+- Diagnóstico técnico
+- Status:
+  - Recebido
+  - Em análise
+  - Aguardando peça
+  - Em reparo
+  - Pronto
+  - Entregue
+- Valor do serviço
+- Valor de peças
+- Valor total
+- Data de entrada
+- Data de saída
+
+📊 DASHBOARD
+- Total de OS abertas
+- Total concluídas
+- Valor faturado
+- OS por status
+- Visão simples e clara
+
+📱 WHATSAPP
+- Botão para abrir conversa com o cliente
+- Mensagem automática com status da OS
+
+━━━━━━━━━━━━━━━━━━━━━━
+🗄️ BANCO DE DADOS
+━━━━━━━━━━━━━━━━━━━━━━
+- Estrutura simples
+- Tabelas bem organizadas
+- Relacionamentos claros
+- Preferência por SQLite ou MySQL
+- Criar o SQL automaticamente
+
+━━━━━━━━━━━━━━━━━━━━━━
+⚙️ TECNOLOGIAS (GRÁTIS)
+━━━━━━━━━━━━━━━━━━━━━━
+Escolher stack GRATUITA e SIMPLES:
+- Frontend: HTML + CSS moderno + JavaScript (ou framework leve)
+- Backend: PHP ou Node.js
+- Banco: SQLite ou MySQL
+- Sem dependências pagas
+- Pronto para rodar em:
+  - XAMPP
+  - Hosting compartilhado
+  - Replit
+  - Render
+  - Railway
+
+━━━━━━━━━━━━━━━━━━━━━━
+📁 ESTRUTURA DO PROJETO
+━━━━━━━━━━━━━━━━━━━━━━
+- Pastas organizadas
+- Código comentado
+- Arquivo README com:
+  - Como instalar
+  - Como rodar
+  - Como usar
+  - Tudo explicado para leigo
+
+━━━━━━━━━━━━━━━━━━━━━━
+🧠 DIFERENCIAL (MUITO IMPORTANTE)
+━━━━━━━━━━━━━━━━━━━━━━
+- O sistema deve ser TÃO SIMPLES
+  que qualquer técnico consiga usar
+  sem treinamento
+- Nada técnico aparecendo na tela
+- Linguagem simples
+- Botões claros (Novo Cliente, Nova OS, etc.)
+
+━━━━━━━━━━━━━━━━━━━━━━
+📤 ENTREGA
+━━━━━━━━━━━━━━━━━━━━━━
+Você DEVE entregar:
+1. Código completo
+2. Estrutura de pastas
+3. Banco de dados (SQL)
+4. Telas principais
+5. README explicativo
+6. Tudo funcionando do zero
+
+━━━━━━━━━━━━━━━━━━━━━━
+🚫 REGRAS
+━━━━━━━━━━━━━━━━━━━━━━
+- Não economize qualidade
+- Não faça algo genérico
+- Não explique demais fora do código
+- Pense como produto profissional
+- Pense como se fosse vender esse sistema
+
+AGORA EXECUTE.
+Crie o melhor sistema de oficina de eletrodomésticos possível,
+simples, bonito, funcional e surrealmente profissional.

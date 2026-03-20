@@ -1,0 +1,51 @@
+Implement the following improvements with minimal changes. Do NOT rewrite working parts. Keep existing data intact.
+
+A) Customer approval via tracking link + customer comment
+1) On the public tracking page /acompanhamento/:token:
+   - If the OS has a pending budget (status "Aguardando aprovação" or similar), show:
+     * Button "Aprovar Orçamento"
+     * Button "Recusar Orçamento"
+     * A text field "Comentário do cliente (opcional)"
+   - When customer clicks approve/refuse:
+     * Save budget_decision = APPROVED or REFUSED
+     * Save customer_comment (text) + timestamp
+     * Update OS status accordingly (e.g., "Aprovado" / "Recusado")
+     * Add a timeline/history entry: "Cliente aprovou/recusou" + time + comment (if any)
+   - Security:
+     * Use the same public token route, but ensure actions are protected against guessing/brute force.
+     * Add simple rate limiting per token/IP if easy; otherwise at minimum ensure token is unguessable and stored server-side.
+
+B) Admin can delete records (clients/appliances) safely
+2) Add admin-only delete actions:
+   - Clients: delete (prefer SOFT DELETE if possible), with strong confirmation.
+   - Appliances: delete (prefer SOFT DELETE).
+   - Rules:
+     * If there are OS linked, either block deletion with a clear message OR implement soft delete and keep historical OS intact.
+   - Only ADMIN can see/delete.
+
+C) Staff-only QR access for operational updates (status + budget)
+3) Add a restricted staff route separate from public tracking:
+   - Create staff token per OS: staff_token (unguessable).
+   - Route: /t/:staff_token (staff view)
+   - This view requires authentication + role (RBAC). If RBAC is not implemented yet, implement minimal RBAC now:
+     * roles: ADMIN, ATENDENTE, TECNICO
+     * only logged-in staff can access /t/:staff_token
+   - Capabilities:
+     * TECNICO: update budget fields, diagnosis, repair statuses
+     * ATENDENTE: update basic status and finalize OS (dar baixa)
+     * ADMIN: everything
+   - Add "Imprimir Etiqueta (Térmica)" to print a label that includes BOTH:
+     * QR public (customer tracking) — optional small
+     * QR staff (operational) — main QR
+     Clearly label them in tiny text: "Cliente" and "Equipe".
+
+D) RBAC check
+4) If RBAC/users already exist, reuse them; otherwise implement:
+   - Users screen (Admin only): create user (name, username, password, role)
+   - Show role badge on header
+   - Hide/disable forbidden actions by role
+
+Deliverables:
+- List exactly the new routes
+- Explain how to test approval/refusal and staff QR in 5 minutes
+- Confirm which parts used soft delete or blocked delete with message
