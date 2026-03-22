@@ -4,6 +4,7 @@ import {
   LayoutDashboard, 
   Users, 
   Wrench, 
+  AlertTriangle,
   LogOut, 
   Menu,
   PlusCircle,
@@ -18,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useQuery } from "@tanstack/react-query";
 import { type SystemSettings } from "@shared/schema";
+import { api } from "@shared/routes";
 
 const ROLE_LABELS: Record<string, { label: string; color: string }> = {
   ADMIN: { label: "Admin", color: "bg-red-100 text-red-700 border-red-200" },
@@ -34,9 +36,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
     queryKey: ["/api/settings"],
   });
 
+  const { data: pickupWarnings } = useQuery<Array<unknown>>({
+    queryKey: [api.serviceOrders.pickupWarnings.path],
+    queryFn: async () => {
+      const res = await fetch(api.serviceOrders.pickupWarnings.path, { credentials: "include" });
+      if (!res.ok) {
+        return [];
+      }
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+    staleTime: 1000 * 60,
+    retry: false,
+  });
+
   const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard, permission: "view_dashboard" },
     { href: "/orders", label: "Ordens de Serviço", icon: Wrench, permission: "view_orders" },
+    { href: "/pickup-warnings", label: "Avisos de retirada", icon: AlertTriangle, permission: "view_orders" },
     { href: "/customers", label: "Clientes", icon: Users, permission: "view_customers" },
     { href: "/cash", label: "Caixa", icon: Shield, permission: "view_dashboard" },
   ];
@@ -89,6 +106,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
               >
                 <Icon size={20} />
                 <span>{item.label}</span>
+                {item.href === "/pickup-warnings" && typeof pickupWarnings?.length === "number" && (
+                  <Badge variant="outline" className="ml-auto text-xs">
+                    {pickupWarnings.length}
+                  </Badge>
+                )}
               </div>
             </Link>
           );
