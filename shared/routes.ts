@@ -31,6 +31,23 @@ const pickupWarningListItemSchema = z.object({
     brand: z.string(),
     model: z.string(),
   }),
+  pickupWarning: z.object({
+    id: z.number(),
+    serviceOrderId: z.number(),
+    warningSentAt: z.union([z.string(), z.date()]),
+    warningDeadlineAt: z.union([z.string(), z.date()]),
+    warningStatus: z.string(),
+    isExpired: z.boolean(),
+  }).nullable(),
+});
+
+const pickupWarningSchema = z.object({
+  id: z.number(),
+  serviceOrderId: z.number(),
+  warningSentAt: z.union([z.string(), z.date()]),
+  warningDeadlineAt: z.union([z.string(), z.date()]),
+  warningStatus: z.string(),
+  isExpired: z.boolean(),
 });
 
 export const api = {
@@ -109,6 +126,16 @@ export const api = {
       path: '/api/service-orders/pickup-warnings',
       responses: {
         200: z.array(pickupWarningListItemSchema),
+      },
+    },
+    createPickupWarning: {
+      method: 'POST' as const,
+      path: '/api/service-orders/:id/pickup-warning',
+      input: z.object({}),
+      responses: {
+        200: pickupWarningSchema,
+        400: errorSchemas.validation,
+        404: errorSchemas.notFound,
       },
     },
     create: {
