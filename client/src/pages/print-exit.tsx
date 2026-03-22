@@ -216,6 +216,16 @@ export default function PrintExit() {
           </div>
         </div>
 
+        {order.finalizedBy && (
+          <>
+            <div className="divider" />
+            <div className="section">
+              <div className="label">Responsável pela Saída</div>
+              <div className="bold">{order.finalizedBy}</div>
+            </div>
+          </>
+        )}
+
         <div className="divider" />
 
         <div className="section">

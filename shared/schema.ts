@@ -42,6 +42,7 @@ export const serviceOrders = pgTable("service_orders", {
   orderNumber: text("order_number"),
   customerId: integer("customer_id").notNull(),
   applianceId: integer("appliance_id").notNull(),
+  createdBy: text("created_by"),
   defect: text("defect").notNull(),
   diagnosis: text("diagnosis"),
   status: text("status").notNull().default("Recebido"), // Recebido, Em análise, Aguardando peça, Em reparo, Pronto, Entregue

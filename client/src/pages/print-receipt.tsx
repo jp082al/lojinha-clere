@@ -155,6 +155,13 @@ export default function PrintReceipt() {
           </div>
         </div>
 
+        {order.createdBy && (
+          <div className="section">
+            <div className="label">Responsável pela Entrada</div>
+            <div className="bold">{order.createdBy}</div>
+          </div>
+        )}
+
         <div className="divider" />
 
         <div className="section">

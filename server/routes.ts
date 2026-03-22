@@ -132,7 +132,10 @@ export async function registerRoutes(
   app.post(api.serviceOrders.create.path, isAuthenticated, async (req, res) => {
     try {
       const input = api.serviceOrders.create.input.parse(req.body);
-      const order = await storage.createServiceOrder(input);
+      const order = await storage.createServiceOrder({
+        ...input,
+        createdBy: req.user!.username,
+      });
       res.status(201).json(order);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -148,7 +151,14 @@ export async function registerRoutes(
   app.put(api.serviceOrders.update.path, isAuthenticated, async (req, res) => {
     try {
       const input = api.serviceOrders.update.input.parse(req.body);
-      const order = await storage.updateServiceOrder(Number(req.params.id), input);
+      const isFinalizationUpdate =
+        input.finalStatus !== undefined ||
+        input.exitDate !== undefined ||
+        input.status === "Entregue";
+      const order = await storage.updateServiceOrder(Number(req.params.id), {
+        ...input,
+        ...(isFinalizationUpdate ? { finalizedBy: req.user!.username } : {}),
+      });
       if (!order) {
         return res.status(404).json({ message: 'Order not found' });
       }
