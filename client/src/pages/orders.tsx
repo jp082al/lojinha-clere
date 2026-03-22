@@ -64,12 +64,13 @@ import { useAuth } from "@/hooks/use-auth";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { apiRequest } from "@/lib/queryClient";
 
-type OrderTab = "all" | "not_evaluated" | "awaiting_approval" | "not_authorized" | "ready" | "finalized";
+type OrderTab = "all" | "not_evaluated" | "awaiting_approval" | "authorized" | "not_authorized" | "ready" | "finalized";
 
 const TAB_LABELS: Record<OrderTab, string> = {
   all: "Todas",
   not_evaluated: "Não avaliadas",
   awaiting_approval: "Aguardando aprovação",
+  authorized: "Autorizadas",
   not_authorized: "Não autorizadas",
   ready: "Prontas",
   finalized: "Finalizadas",
@@ -92,6 +93,15 @@ function getOrderTab(order: any): OrderTab | null {
     return "awaiting_approval";
   }
 
+  if (
+    !order.finalStatus &&
+    order.budgetStatus === "APROVADO" &&
+    order.status !== "Pronto" &&
+    order.status !== "Entregue"
+  ) {
+    return "authorized";
+  }
+
   if (!order.finalStatus && order.status === "Pronto") {
     return "ready";
   }
@@ -99,7 +109,8 @@ function getOrderTab(order: any): OrderTab | null {
   if (
     !order.finalStatus &&
     ["Recebido", "Em análise", "Aguardando peça", "Em reparo"].includes(order.status) &&
-    order.budgetStatus !== "AGUARDANDO_APROVACAO"
+    order.budgetStatus !== "AGUARDANDO_APROVACAO" &&
+    order.budgetStatus !== "APROVADO"
   ) {
     return "not_evaluated";
   }
