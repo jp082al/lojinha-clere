@@ -20,6 +20,7 @@ import Login from "@/pages/login";
 import UsersPage from "@/pages/users";
 import CashPage from "@/pages/cash";
 import SettingsPage from "@/pages/settings";
+import PickupWarningsPage from "@/pages/pickup-warnings";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
@@ -55,6 +56,7 @@ function Router() {
       <Route path="/orders" component={() => <ProtectedRoute component={Orders} />} />
       <Route path="/new-order" component={() => <ProtectedRoute component={NewOrder} />} />
       <Route path="/cash" component={() => <ProtectedRoute component={CashPage} />} />
+      <Route path="/pickup-warnings" component={() => <ProtectedRoute component={PickupWarningsPage} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
       <Route path="/users" component={() => <ProtectedRoute component={UsersPage} />} />
       <Route path="/print/receipt/:id" component={PrintReceipt} />

@@ -91,6 +91,11 @@ export async function registerRoutes(
     res.json(orders);
   });
 
+  app.get(api.serviceOrders.pickupWarnings.path, isAuthenticated, async (req, res) => {
+    const orders = await storage.getPickupWarningOrders();
+    res.json(orders);
+  });
+
   app.get(api.serviceOrders.get.path, isAuthenticated, async (req, res) => {
     const order = await storage.getServiceOrder(Number(req.params.id));
     if (!order) {

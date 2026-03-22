@@ -14,6 +14,25 @@ export const errorSchemas = {
   }),
 };
 
+const pickupWarningListItemSchema = z.object({
+  id: z.number(),
+  orderNumber: z.string().nullable(),
+  status: z.string(),
+  entryDate: z.union([z.string(), z.date()]),
+  daysPending: z.number(),
+  customer: z.object({
+    id: z.number(),
+    name: z.string(),
+    phone: z.string(),
+  }),
+  appliance: z.object({
+    id: z.number(),
+    type: z.string(),
+    brand: z.string(),
+    model: z.string(),
+  }),
+});
+
 export const api = {
   customers: {
     list: {
@@ -83,6 +102,13 @@ export const api = {
       responses: {
         200: z.custom<typeof serviceOrders.$inferSelect & { customer: typeof customers.$inferSelect, appliance: typeof appliances.$inferSelect }>(),
         404: errorSchemas.notFound,
+      },
+    },
+    pickupWarnings: {
+      method: 'GET' as const,
+      path: '/api/service-orders/pickup-warnings',
+      responses: {
+        200: z.array(pickupWarningListItemSchema),
       },
     },
     create: {

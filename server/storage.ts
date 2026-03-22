@@ -35,6 +35,24 @@ export interface IStorage {
   getServiceOrders(): Promise<(ServiceOrder & { customer: Customer, appliance: Appliance })[]>;
   getServiceOrder(id: number): Promise<(ServiceOrder & { customer: Customer, appliance: Appliance }) | undefined>;
   getServiceOrderByToken(token: string): Promise<(ServiceOrder & { customer: Customer, appliance: Appliance }) | undefined>;
+  getPickupWarningOrders(): Promise<Array<{
+    id: number;
+    orderNumber: string | null;
+    status: string;
+    entryDate: Date | null;
+    daysPending: number;
+    customer: {
+      id: number;
+      name: string;
+      phone: string;
+    };
+    appliance: {
+      id: number;
+      type: string;
+      brand: string;
+      model: string;
+    };
+  }>>;
 
   createServiceOrder(order: InsertServiceOrder): Promise<ServiceOrder>;
   updateServiceOrder(id: number, order: Partial<InsertServiceOrder>): Promise<ServiceOrder | undefined>;
@@ -171,6 +189,52 @@ export class DatabaseStorage implements IStorage {
       customer: row.customer,
       appliance: row.appliance,
     };
+  }
+
+  async getPickupWarningOrders() {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 90);
+
+    const rows = await db
+      .select({
+        id: serviceOrders.id,
+        orderNumber: serviceOrders.orderNumber,
+        status: serviceOrders.status,
+        entryDate: serviceOrders.entryDate,
+        customer: {
+          id: customers.id,
+          name: customers.name,
+          phone: customers.phone,
+        },
+        appliance: {
+          id: appliances.id,
+          type: appliances.type,
+          brand: appliances.brand,
+          model: appliances.model,
+        },
+      })
+      .from(serviceOrders)
+      .innerJoin(customers, eq(serviceOrders.customerId, customers.id))
+      .innerJoin(appliances, eq(serviceOrders.applianceId, appliances.id))
+      .where(and(
+        lte(serviceOrders.entryDate, cutoffDate),
+        sql`${serviceOrders.exitDate} IS NULL`,
+        sql`${serviceOrders.finalStatus} IS NULL`,
+        sql`${serviceOrders.status} != 'Entregue'`,
+      ))
+      .orderBy(serviceOrders.entryDate);
+
+    return rows.map((row) => {
+      const entryDate = row.entryDate;
+      const daysPending = entryDate
+        ? Math.max(0, Math.floor((Date.now() - new Date(entryDate).getTime()) / (1000 * 60 * 60 * 24)))
+        : 0;
+
+      return {
+        ...row,
+        daysPending,
+      };
+    });
   }
 
   private generateTrackingToken(): string {
