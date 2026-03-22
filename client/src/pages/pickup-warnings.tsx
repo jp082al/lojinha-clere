@@ -2,9 +2,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, MessageSquare } from "lucide-react";
 import { format } from "date-fns";
-import { useCreatePickupWarning, usePickupWarnings } from "@/hooks/use-pickup-warnings";
+import { usePickupWarnings } from "@/hooks/use-pickup-warnings";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
 
 function normalizePhone(phone: string) {
   const digits = phone.replace(/\D/g, "");
@@ -22,18 +21,6 @@ function buildWhatsappMessage(order: any) {
 
 export default function PickupWarningsPage() {
   const { data: orders = [], isLoading } = usePickupWarnings();
-  const { mutateAsync: createPickupWarning, isPending } = useCreatePickupWarning();
-  const { toast } = useToast();
-
-  function formatCountdown(deadline: string | Date) {
-    const diffMs = new Date(deadline).getTime() - Date.now();
-    if (diffMs <= 0) return "Tempo expirado";
-
-    const totalMinutes = Math.floor(diffMs / (1000 * 60));
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    return `${hours}h ${minutes}min restantes`;
-  }
 
   return (
     <div className="space-y-8">
@@ -64,8 +51,6 @@ export default function PickupWarningsPage() {
           {orders.map((order) => {
             const normalizedPhone = normalizePhone(order.customer.phone || "");
             const canSendWhatsapp = !!normalizedPhone;
-            const hasWarning = !!order.pickupWarning;
-            const warningExpired = !!order.pickupWarning?.isExpired;
 
             return (
               <Card key={order.id} className="border-orange-200 bg-orange-50/30">
@@ -96,26 +81,6 @@ export default function PickupWarningsPage() {
                           <span className="font-medium">Entrada:</span>{" "}
                           {format(new Date(order.entryDate), "dd/MM/yyyy")}
                         </p>
-                        <p className="text-sm">
-                          <span className="font-medium">Aviso:</span>{" "}
-                          {hasWarning ? "Registrado" : "Pendente"}
-                        </p>
-                        {order.pickupWarning && (
-                          <>
-                            <p className="text-sm">
-                              <span className="font-medium">Enviado em:</span>{" "}
-                              {format(new Date(order.pickupWarning.warningSentAt), "dd/MM/yyyy HH:mm")}
-                            </p>
-                            <p className="text-sm">
-                              <span className="font-medium">Prazo final:</span>{" "}
-                              {format(new Date(order.pickupWarning.warningDeadlineAt), "dd/MM/yyyy HH:mm")}
-                            </p>
-                            <p className={`text-sm ${warningExpired ? "font-medium text-red-700" : "text-muted-foreground"}`}>
-                              <span className="font-medium text-foreground">Temporizador:</span>{" "}
-                              {warningExpired ? "Tempo expirado" : formatCountdown(order.pickupWarning.warningDeadlineAt)}
-                            </p>
-                          </>
-                        )}
                       </div>
                     </div>
 
@@ -126,26 +91,15 @@ export default function PickupWarningsPage() {
                       </div>
                       <Button
                         className="bg-green-600 hover:bg-green-700"
-                        disabled={!canSendWhatsapp || isPending}
-                        onClick={async () => {
+                        disabled={!canSendWhatsapp}
+                        onClick={() => {
                           if (!normalizedPhone) return;
-                          try {
-                            await createPickupWarning({ id: order.id });
-                          } catch (error) {
-                            toast({
-                              title: "Erro ao registrar aviso",
-                              description: error instanceof Error ? error.message : "Erro desconhecido",
-                              variant: "destructive",
-                            });
-                            return;
-                          }
-
                           const message = buildWhatsappMessage(order);
                           window.open(`https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`, "_blank");
                         }}
                       >
                         <MessageSquare className="mr-2 h-4 w-4" />
-                        {hasWarning ? "Abrir WhatsApp" : "Registrar e avisar"}
+                        Avisar no WhatsApp
                       </Button>
                     </div>
                   </div>
