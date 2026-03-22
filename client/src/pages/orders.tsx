@@ -64,24 +64,62 @@ import { useAuth } from "@/hooks/use-auth";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { apiRequest } from "@/lib/queryClient";
 
-type StatusFilter = "all" | "open" | "finalized";
+type OrderTab = "all" | "not_evaluated" | "awaiting_approval" | "not_authorized" | "ready" | "finalized";
+
+const TAB_LABELS: Record<OrderTab, string> = {
+  all: "Todas",
+  not_evaluated: "Não avaliadas",
+  awaiting_approval: "Aguardando aprovação",
+  not_authorized: "Não autorizadas",
+  ready: "Prontas",
+  finalized: "Finalizadas",
+};
+
+function getOrderTab(order: any): OrderTab | null {
+  if (order.finalStatus === "NAO_AUTORIZADO") {
+    return "not_authorized";
+  }
+
+  if (
+    order.finalStatus === "ENTREGUE" ||
+    order.finalStatus === "DESCARTE_AUTORIZADO" ||
+    order.status === "Entregue"
+  ) {
+    return "finalized";
+  }
+
+  if (!order.finalStatus && order.budgetStatus === "AGUARDANDO_APROVACAO") {
+    return "awaiting_approval";
+  }
+
+  if (!order.finalStatus && order.status === "Pronto") {
+    return "ready";
+  }
+
+  if (
+    !order.finalStatus &&
+    ["Recebido", "Em análise", "Aguardando peça", "Em reparo"].includes(order.status) &&
+    order.budgetStatus !== "AGUARDANDO_APROVACAO"
+  ) {
+    return "not_evaluated";
+  }
+
+  return null;
+}
 
 export default function Orders() {
   const [, setLocation] = useLocation();
   const { data: orders = [], isLoading } = useServiceOrders();
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [activeTab, setActiveTab] = useState<OrderTab>("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any | null>(null);
   const [finalizingOrder, setFinalizingOrder] = useState<any | null>(null);
 
   const filteredOrders = orders.filter((order) => {
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "open" && !order.finalStatus) ||
-      (statusFilter === "finalized" && !!order.finalStatus);
+    const matchesTab = activeTab === "all" || getOrderTab(order) === activeTab;
 
-    if (!matchesStatus) return false;
+    if (!matchesTab) return false;
     if (!searchTerm) return true;
 
     const search = searchTerm.toLowerCase();
@@ -124,27 +162,16 @@ export default function Orders() {
         </div>
         
         <div className="flex gap-2">
-          <Button
-            variant={statusFilter === "all" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setStatusFilter("all")}
-          >
-            Todas
-          </Button>
-          <Button
-            variant={statusFilter === "open" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setStatusFilter("open")}
-          >
-            Abertas
-          </Button>
-          <Button
-            variant={statusFilter === "finalized" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setStatusFilter("finalized")}
-          >
-            Finalizadas
-          </Button>
+          {(Object.keys(TAB_LABELS) as OrderTab[]).map((tab) => (
+            <Button
+              key={tab}
+              variant={activeTab === tab ? "default" : "outline"}
+              size="sm"
+              onClick={() => setActiveTab(tab)}
+            >
+              {TAB_LABELS[tab]}
+            </Button>
+          ))}
         </div>
       </div>
 
@@ -156,7 +183,7 @@ export default function Orders() {
         <div className="grid gap-4">
           {filteredOrders?.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground bg-card rounded-xl border border-dashed">
-              Nenhuma ordem de serviço encontrada.
+              Nenhuma ordem de serviço encontrada em {TAB_LABELS[activeTab]}.
             </div>
           ) : (
             filteredOrders?.map((order) => {
