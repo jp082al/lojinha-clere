@@ -96,6 +96,31 @@ export async function registerRoutes(
     res.json(orders);
   });
 
+  app.post(api.serviceOrders.createPickupWarning.path, isAuthenticated, async (req, res) => {
+    try {
+      api.serviceOrders.createPickupWarning.input.parse(req.body ?? {});
+      const result = await storage.createPickupWarning(Number(req.params.id));
+
+      if (result.kind === "not_found") {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      if (result.kind === "not_eligible") {
+        return res.status(400).json({ message: "Order is not eligible for pickup warning" });
+      }
+
+      res.json(result.warning);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join('.'),
+        });
+      }
+      throw err;
+    }
+  });
+
   app.get(api.serviceOrders.get.path, isAuthenticated, async (req, res) => {
     const order = await storage.getServiceOrder(Number(req.params.id));
     if (!order) {

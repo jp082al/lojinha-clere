@@ -67,14 +67,29 @@ export const serviceOrders = pgTable("service_orders", {
   budgetApprovedBy: text("budget_approved_by"),
 });
 
+export const serviceOrderPickupWarnings = pgTable("service_order_pickup_warnings", {
+  id: serial("id").primaryKey(),
+  serviceOrderId: integer("service_order_id").notNull().unique().references(() => serviceOrders.id, { onDelete: "cascade" }),
+  warningSentAt: timestamp("warning_sent_at").notNull(),
+  warningDeadlineAt: timestamp("warning_deadline_at").notNull(),
+  warningStatus: text("warning_status").notNull().default("SENT"),
+});
+
 export const insertServiceOrderSchema = createInsertSchema(serviceOrders, {
   exitDate: z.coerce.date().nullable().optional(),
   budgetSentAt: z.coerce.date().nullable().optional(),
   budgetApprovedAt: z.coerce.date().nullable().optional(),
 }).omit({ id: true, orderNumber: true, entryDate: true });
 
+export const insertServiceOrderPickupWarningSchema = createInsertSchema(serviceOrderPickupWarnings, {
+  warningSentAt: z.coerce.date(),
+  warningDeadlineAt: z.coerce.date(),
+}).omit({ id: true });
+
 export type ServiceOrder = typeof serviceOrders.$inferSelect;
 export type InsertServiceOrder = z.infer<typeof insertServiceOrderSchema>;
+export type ServiceOrderPickupWarning = typeof serviceOrderPickupWarnings.$inferSelect;
+export type InsertServiceOrderPickupWarning = z.infer<typeof insertServiceOrderPickupWarningSchema>;
 
 
 // === PAYMENTS ===
@@ -139,6 +154,17 @@ export const serviceOrdersRelations = relations(serviceOrders, ({ one, many }) =
     references: [appliances.id],
   }),
   payments: many(payments),
+  pickupWarning: one(serviceOrderPickupWarnings, {
+    fields: [serviceOrders.id],
+    references: [serviceOrderPickupWarnings.serviceOrderId],
+  }),
+}));
+
+export const serviceOrderPickupWarningsRelations = relations(serviceOrderPickupWarnings, ({ one }) => ({
+  serviceOrder: one(serviceOrders, {
+    fields: [serviceOrderPickupWarnings.serviceOrderId],
+    references: [serviceOrders.id],
+  }),
 }));
 
 export const paymentsRelations = relations(payments, ({ one }) => ({

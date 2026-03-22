@@ -3,6 +3,7 @@ import {
   customers,
   appliances,
   serviceOrders,
+  serviceOrderPickupWarnings,
   payments,
   cashClosings,
   systemSettings,
@@ -12,6 +13,8 @@ import {
   type InsertAppliance,
   type ServiceOrder,
   type InsertServiceOrder,
+  type ServiceOrderPickupWarning,
+  type InsertServiceOrderPickupWarning,
   type Payment,
   type InsertPayment,
   type CashClosing,
@@ -52,7 +55,30 @@ export interface IStorage {
       brand: string;
       model: string;
     };
+    pickupWarning: {
+      id: number;
+      serviceOrderId: number;
+      warningSentAt: Date;
+      warningDeadlineAt: Date;
+      warningStatus: string;
+      isExpired: boolean;
+    } | null;
   }>>;
+  createPickupWarning(id: number): Promise<
+    | { kind: "not_found" }
+    | { kind: "not_eligible" }
+    | {
+        kind: "ok";
+        warning: {
+          id: number;
+          serviceOrderId: number;
+          warningSentAt: Date;
+          warningDeadlineAt: Date;
+          warningStatus: string;
+          isExpired: boolean;
+        };
+      }
+  >;
 
   createServiceOrder(order: InsertServiceOrder): Promise<ServiceOrder>;
   updateServiceOrder(id: number, order: Partial<InsertServiceOrder>): Promise<ServiceOrder | undefined>;
@@ -212,10 +238,18 @@ export class DatabaseStorage implements IStorage {
           brand: appliances.brand,
           model: appliances.model,
         },
+        pickupWarning: {
+          id: serviceOrderPickupWarnings.id,
+          serviceOrderId: serviceOrderPickupWarnings.serviceOrderId,
+          warningSentAt: serviceOrderPickupWarnings.warningSentAt,
+          warningDeadlineAt: serviceOrderPickupWarnings.warningDeadlineAt,
+          warningStatus: serviceOrderPickupWarnings.warningStatus,
+        },
       })
       .from(serviceOrders)
       .innerJoin(customers, eq(serviceOrders.customerId, customers.id))
       .innerJoin(appliances, eq(serviceOrders.applianceId, appliances.id))
+      .leftJoin(serviceOrderPickupWarnings, eq(serviceOrderPickupWarnings.serviceOrderId, serviceOrders.id))
       .where(and(
         lte(serviceOrders.entryDate, cutoffDate),
         sql`${serviceOrders.exitDate} IS NULL`,
@@ -229,12 +263,98 @@ export class DatabaseStorage implements IStorage {
       const daysPending = entryDate
         ? Math.max(0, Math.floor((Date.now() - new Date(entryDate).getTime()) / (1000 * 60 * 60 * 24)))
         : 0;
+      const pickupWarning = row.pickupWarning && row.pickupWarning.id !== null
+        ? {
+            id: row.pickupWarning.id,
+            serviceOrderId: row.pickupWarning.serviceOrderId,
+            warningSentAt: row.pickupWarning.warningSentAt,
+            warningDeadlineAt: row.pickupWarning.warningDeadlineAt,
+            warningStatus: row.pickupWarning.warningStatus,
+            isExpired: new Date(row.pickupWarning.warningDeadlineAt).getTime() <= Date.now(),
+          }
+        : null;
 
       return {
         ...row,
         daysPending,
+        pickupWarning,
       };
     });
+  }
+
+  async createPickupWarning(id: number) {
+    const [existingOrder] = await db
+      .select({
+        id: serviceOrders.id,
+        entryDate: serviceOrders.entryDate,
+        exitDate: serviceOrders.exitDate,
+        finalStatus: serviceOrders.finalStatus,
+        status: serviceOrders.status,
+      })
+      .from(serviceOrders)
+      .where(eq(serviceOrders.id, id));
+
+    if (!existingOrder) {
+      return { kind: "not_found" as const };
+    }
+
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 90);
+
+    const isEligible =
+      !!existingOrder.entryDate &&
+      new Date(existingOrder.entryDate).getTime() <= cutoffDate.getTime() &&
+      !existingOrder.exitDate &&
+      !existingOrder.finalStatus &&
+      existingOrder.status !== "Entregue";
+
+    if (!isEligible) {
+      return { kind: "not_eligible" as const };
+    }
+
+    const [existingWarning] = await db
+      .select()
+      .from(serviceOrderPickupWarnings)
+      .where(eq(serviceOrderPickupWarnings.serviceOrderId, id));
+
+    if (existingWarning) {
+      return {
+        kind: "ok" as const,
+        warning: {
+          id: existingWarning.id,
+          serviceOrderId: existingWarning.serviceOrderId,
+          warningSentAt: existingWarning.warningSentAt,
+          warningDeadlineAt: existingWarning.warningDeadlineAt,
+          warningStatus: existingWarning.warningStatus,
+          isExpired: existingWarning.warningDeadlineAt.getTime() <= Date.now(),
+        },
+      };
+    }
+
+    const warningSentAt = new Date();
+    const warningDeadlineAt = new Date(warningSentAt.getTime() + (48 * 60 * 60 * 1000));
+
+    const [createdWarning] = await db
+      .insert(serviceOrderPickupWarnings)
+      .values({
+        serviceOrderId: id,
+        warningSentAt,
+        warningDeadlineAt,
+        warningStatus: "SENT",
+      })
+      .returning();
+
+    return {
+      kind: "ok" as const,
+      warning: {
+        id: createdWarning.id,
+        serviceOrderId: createdWarning.serviceOrderId,
+        warningSentAt: createdWarning.warningSentAt,
+        warningDeadlineAt: createdWarning.warningDeadlineAt,
+        warningStatus: createdWarning.warningStatus,
+        isExpired: createdWarning.warningDeadlineAt.getTime() <= Date.now(),
+      },
+    };
   }
 
   private generateTrackingToken(): string {
