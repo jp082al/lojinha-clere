@@ -40,29 +40,29 @@ export default function Customers() {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 md:space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Clientes</h2>
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Clientes</h2>
           <p className="text-muted-foreground mt-2">Gerencie sua base de clientes.</p>
         </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
-            <Button className="shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all">
+            <Button className="w-full shadow-lg transition-all hover:-translate-y-0.5 hover:shadow-xl sm:w-auto">
               <Plus className="mr-2 h-4 w-4" /> Novo Cliente
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="max-w-[calc(100vw-1.5rem)] sm:max-w-[500px]">
             <CustomerForm onClose={() => setIsCreateOpen(false)} />
           </DialogContent>
         </Dialog>
       </div>
 
-      <div className="flex items-center gap-4 bg-card p-4 rounded-xl border border-border shadow-sm">
+      <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-sm sm:gap-4 sm:p-4">
         <Search className="h-5 w-5 text-muted-foreground" />
         <Input 
           placeholder="Buscar por nome ou telefone..." 
-          className="border-none shadow-none focus-visible:ring-0 bg-transparent text-lg"
+          className="border-none bg-transparent text-base shadow-none focus-visible:ring-0 sm:text-lg"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
@@ -73,7 +73,7 @@ export default function Customers() {
           {[1, 2, 3].map(i => <div key={i} className="h-20 bg-muted/20 animate-pulse rounded-xl" />)}
         </div>
       ) : (
-        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+        <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
           <Table>
             <TableHeader className="bg-muted/30">
               <TableRow>
@@ -95,18 +95,18 @@ export default function Customers() {
                   <TableRow key={customer.id} className="group cursor-pointer hover:bg-muted/30 transition-colors">
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold">
                           {customer.name[0].toUpperCase()}
                         </div>
-                        {customer.name}
+                        <span className="min-w-0 break-words">{customer.name}</span>
                       </div>
                     </TableCell>
-                    <TableCell>{customer.phone}</TableCell>
+                    <TableCell className="whitespace-nowrap">{customer.phone}</TableCell>
                     <TableCell className="hidden md:table-cell text-muted-foreground truncate max-w-[200px]">
                       {customer.address || "-"}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => setEditingCustomer(customer)}>
+                      <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setEditingCustomer(customer)}>
                         <Eye className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                       </Button>
                     </TableCell>
@@ -120,7 +120,7 @@ export default function Customers() {
 
       {/* Customer Detail/Edit Dialog */}
       <Dialog open={!!editingCustomer} onOpenChange={(open) => !open && setEditingCustomer(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[90vh] max-w-[calc(100vw-1.5rem)] overflow-y-auto sm:max-w-3xl">
           {editingCustomer && (
             <CustomerDetails 
               customer={editingCustomer} 
@@ -201,10 +201,13 @@ function CustomerForm({ customer, onClose }: { customer?: Customer, onClose: () 
             name="address"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Endereço</FormLabel>
+                <FormLabel>Endereço *</FormLabel>
                 <FormControl>
                   <Input placeholder="Rua, Número, Bairro" {...field} value={field.value || ""} />
                 </FormControl>
+                {!field.value?.trim() && (
+                  <p className="text-sm font-medium text-destructive">Informe o endereço do cliente.</p>
+                )}
                 <FormMessage />
               </FormItem>
             )}
@@ -224,11 +227,15 @@ function CustomerForm({ customer, onClose }: { customer?: Customer, onClose: () 
             )}
           />
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
+          <DialogFooter className="!flex-col gap-2 sm:!flex-row">
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={onClose} disabled={isPending}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={isPending}>
+            <Button
+              type="submit"
+              className="w-full sm:w-auto"
+              disabled={isPending || !form.watch("address")?.trim()}
+            >
               {isPending ? "Salvando..." : (customer ? "Atualizar" : "Cadastrar")}
             </Button>
           </DialogFooter>
@@ -270,12 +277,13 @@ function CustomerDetails({ customer, onClose }: { customer: Customer, onClose: (
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <DialogTitle className="text-2xl">{customer.name}</DialogTitle>
-        <div className="flex gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <DialogTitle className="break-words text-xl sm:text-2xl">{customer.name}</DialogTitle>
+        <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0">
           <Button 
             variant={activeTab === 'info' ? 'default' : 'ghost'} 
             size="sm"
+            className="min-h-10 shrink-0"
             onClick={() => setActiveTab('info')}
           >
             <User className="w-4 h-4 mr-2" /> Info
@@ -283,6 +291,7 @@ function CustomerDetails({ customer, onClose }: { customer: Customer, onClose: (
           <Button 
             variant={activeTab === 'appliances' ? 'default' : 'ghost'} 
             size="sm"
+            className="min-h-10 shrink-0"
             onClick={() => setActiveTab('appliances')}
           >
             <Archive className="w-4 h-4 mr-2" /> Aparelhos
@@ -295,13 +304,13 @@ function CustomerDetails({ customer, onClose }: { customer: Customer, onClose: (
       {activeTab === 'info' ? (
         <div className="grid gap-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1">
+            <div className="space-y-1 rounded-xl border bg-card p-4">
               <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <Phone className="w-3 h-3" /> Telefone
               </span>
               <p className="text-lg">{customer.phone}</p>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 rounded-xl border bg-card p-4">
               <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <MapPin className="w-3 h-3" /> Endereço
               </span>
@@ -319,7 +328,7 @@ function CustomerDetails({ customer, onClose }: { customer: Customer, onClose: (
           <div className="bg-muted/10 p-4 rounded-xl border border-dashed border-border">
             <h4 className="font-semibold mb-4 text-sm">Adicionar Aparelho</h4>
             <Form {...applianceForm}>
-              <form onSubmit={applianceForm.handleSubmit(onAddAppliance)} className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+              <form onSubmit={applianceForm.handleSubmit(onAddAppliance)} className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-end">
                 <FormField
                   control={applianceForm.control}
                   name="type"
@@ -359,7 +368,7 @@ function CustomerDetails({ customer, onClose }: { customer: Customer, onClose: (
                     </FormItem>
                   )}
                 />
-                <Button type="submit" disabled={isAddingAppliance} className="w-full">
+                <Button type="submit" disabled={isAddingAppliance} className="h-11 w-full md:h-10">
                   {isAddingAppliance ? "Adicionando..." : "Adicionar"}
                 </Button>
               </form>
@@ -375,12 +384,12 @@ function CustomerDetails({ customer, onClose }: { customer: Customer, onClose: (
             ) : (
               <div className="grid grid-cols-1 gap-3">
                 {appliances?.map(appliance => (
-                  <div key={appliance.id} className="flex items-center justify-between p-3 bg-card border rounded-lg shadow-sm">
-                    <div>
-                      <p className="font-medium">{appliance.type} - {appliance.brand}</p>
+                  <div key={appliance.id} className="flex flex-col gap-3 rounded-lg border bg-card p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="break-words font-medium">{appliance.type} - {appliance.brand}</p>
                       <p className="text-sm text-muted-foreground">{appliance.model}</p>
                     </div>
-                    <span className="text-xs bg-muted px-2 py-1 rounded">
+                    <span className="self-start rounded bg-muted px-2 py-1 text-xs sm:self-auto">
                       ID: {appliance.id}
                     </span>
                   </div>

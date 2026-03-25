@@ -69,7 +69,7 @@ export default function Tracking() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 p-4">
-      <div className="max-w-lg mx-auto space-y-6 py-8">
+      <div className="mx-auto max-w-lg space-y-5 py-5 sm:space-y-6 sm:py-8">
         <div className="text-center">
           {settings?.logoUrl && (
             <img src={settings.logoUrl} alt="Logo" className="h-12 mx-auto mb-2 object-contain" />
@@ -80,9 +80,9 @@ export default function Tracking() {
 
         <Card className="shadow-lg">
           <CardHeader className="pb-4">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-3xl font-bold">{order.orderNumber}</CardTitle>
-              <Badge className={`${statusConfig.color} px-3 py-1`}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="break-words text-2xl font-bold sm:text-3xl">{order.orderNumber}</CardTitle>
+              <Badge className={`${statusConfig.color} w-fit px-3 py-1`}>
                 <StatusIcon className="h-4 w-4 mr-1" />
                 {statusConfig.label}
               </Badge>
@@ -90,34 +90,34 @@ export default function Tracking() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid gap-4">
-              <div className="flex items-center justify-between py-3 border-b">
+              <div className="flex flex-col gap-1 border-b py-3 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-muted-foreground">Cliente</span>
-                <span className="font-medium">{order.customer.name}</span>
+                <span className="break-words font-medium sm:text-right">{order.customer.name}</span>
               </div>
               
-              <div className="flex items-center justify-between py-3 border-b">
+              <div className="flex flex-col gap-1 border-b py-3 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-muted-foreground">Aparelho</span>
-                <span className="font-medium">
+                <span className="break-words font-medium sm:text-right">
                   {order.appliance.type} {order.appliance.brand}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between py-3 border-b">
+              <div className="flex flex-col gap-1 border-b py-3 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-muted-foreground">Modelo</span>
-                <span className="font-medium">{order.appliance.model}</span>
+                <span className="break-words font-medium sm:text-right">{order.appliance.model}</span>
               </div>
               
-              <div className="flex items-center justify-between py-3 border-b">
+              <div className="flex flex-col gap-1 border-b py-3 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-muted-foreground">Data de Entrada</span>
-                <span className="font-medium">
+                <span className="font-medium sm:text-right">
                   {order.entryDate && format(new Date(order.entryDate), "dd/MM/yyyy", { locale: ptBR })}
                 </span>
               </div>
 
               {order.exitDate && (
-                <div className="flex items-center justify-between py-3 border-b">
+                <div className="flex flex-col gap-1 border-b py-3 sm:flex-row sm:items-center sm:justify-between">
                   <span className="text-muted-foreground">Data de Saída</span>
-                  <span className="font-medium">
+                  <span className="font-medium sm:text-right">
                     {format(new Date(order.exitDate), "dd/MM/yyyy", { locale: ptBR })}
                   </span>
                 </div>

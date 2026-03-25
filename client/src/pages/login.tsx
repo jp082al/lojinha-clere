@@ -33,16 +33,16 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/20 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-muted/20 p-3 sm:p-4">
       <Card className="w-full max-w-md shadow-xl border-t-4 border-t-primary">
-        <CardHeader className="text-center space-y-2">
-          <div className="mx-auto w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4 text-primary">
+        <CardHeader className="space-y-2 px-5 pt-6 text-center sm:px-6">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary sm:h-16 sm:w-16">
             <Wrench className="w-8 h-8" />
           </div>
           <h1 className="text-2xl font-bold font-display tracking-tight">A lojinha Clere</h1>
           <p className="text-muted-foreground">Sistema de Gestão para Assistência Técnica</p>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-5 pb-6 sm:px-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             {(error || loginError) && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
@@ -92,7 +92,7 @@ export default function Login() {
 
             <Button 
               type="submit"
-              className="w-full h-12 text-lg font-medium shadow-md hover:shadow-lg transition-all" 
+              className="h-12 w-full text-base font-medium shadow-md transition-all hover:shadow-lg sm:text-lg" 
               disabled={isLoggingIn}
               data-testid="button-login"
             >

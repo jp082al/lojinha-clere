@@ -57,9 +57,9 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 md:space-y-8">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+        <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Dashboard</h2>
         <p className="text-muted-foreground mt-2">Visão geral do seu negócio.</p>
       </div>
 
@@ -67,11 +67,11 @@ export default function Dashboard() {
         variants={container}
         initial="hidden"
         animate="show"
-        className="grid gap-6 md:grid-cols-3"
+        className="grid gap-4 sm:gap-6 md:grid-cols-3"
       >
         <motion.div variants={item}>
-          <Card className="hover:shadow-lg transition-all duration-300 border-l-4 border-l-primary">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card className="border-l-4 border-l-primary transition-all duration-300 hover:shadow-lg">
+            <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total de Ordens</CardTitle>
               <ClipboardList className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
@@ -83,8 +83,8 @@ export default function Dashboard() {
         </motion.div>
 
         <motion.div variants={item}>
-          <Card className="hover:shadow-lg transition-all duration-300 border-l-4 border-l-green-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card className="border-l-4 border-l-green-500 transition-all duration-300 hover:shadow-lg">
+            <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Ordens Concluídas</CardTitle>
               <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
@@ -96,8 +96,8 @@ export default function Dashboard() {
         </motion.div>
 
         <motion.div variants={item}>
-          <Card className="hover:shadow-lg transition-all duration-300 border-l-4 border-l-emerald-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card className="border-l-4 border-l-emerald-500 transition-all duration-300 hover:shadow-lg">
+            <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Faturamento Estimado</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
@@ -118,25 +118,25 @@ export default function Dashboard() {
       >
         <Card className="shadow-sm">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex flex-wrap items-center gap-2">
               <Activity className="h-5 w-5 text-primary" />
               Distribuição por Status
             </CardTitle>
           </CardHeader>
-          <CardContent className="h-[400px]">
+          <CardContent className="h-[320px] px-2 sm:h-[400px] sm:px-6">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <BarChart data={chartData} margin={{ top: 20, right: 12, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                 <XAxis 
                   dataKey="name" 
                   stroke="#888888" 
-                  fontSize={12} 
+                  fontSize={10} 
                   tickLine={false} 
                   axisLine={false}
                 />
                 <YAxis 
                   stroke="#888888" 
-                  fontSize={12} 
+                  fontSize={10} 
                   tickLine={false} 
                   axisLine={false} 
                   tickFormatter={(value) => `${value}`}
@@ -150,7 +150,7 @@ export default function Dashboard() {
                     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                   }}
                 />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={50}>
+                <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={36}>
                   {chartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}

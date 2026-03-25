@@ -145,14 +145,14 @@ export default function Orders() {
   });
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 md:space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Ordens de Serviço</h2>
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Ordens de Serviço</h2>
           <p className="text-muted-foreground mt-2">Gerencie e acompanhe todos os serviços.</p>
         </div>
         <Button 
-          className="shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+          className="w-full shadow-lg transition-all hover:-translate-y-0.5 hover:shadow-xl sm:w-auto"
           onClick={() => setLocation("/new-order")}
           data-testid="button-new-order"
         >
@@ -160,24 +160,25 @@ export default function Orders() {
         </Button>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-        <div className="flex-1 flex items-center gap-4 bg-card p-4 rounded-xl border border-border shadow-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+        <div className="flex flex-1 items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-sm sm:gap-4 sm:p-4">
           <Search className="h-5 w-5 text-muted-foreground" />
           <Input 
             placeholder="Buscar por cliente ou Nº da OS..." 
-            className="border-none shadow-none focus-visible:ring-0 bg-transparent text-lg"
+            className="border-none bg-transparent text-base shadow-none focus-visible:ring-0 sm:text-lg"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             data-testid="input-search-orders"
           />
         </div>
         
-        <div className="flex gap-2">
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:px-0 sm:pb-0">
           {(Object.keys(TAB_LABELS) as OrderTab[]).map((tab) => (
             <Button
               key={tab}
               variant={activeTab === tab ? "default" : "outline"}
               size="sm"
+              className="min-h-10 shrink-0 rounded-full px-4"
               onClick={() => setActiveTab(tab)}
             >
               {TAB_LABELS[tab]}
@@ -204,11 +205,11 @@ export default function Orders() {
                 className={`hover:shadow-md transition-shadow cursor-pointer group ${order.finalStatus ? 'opacity-75' : ''}`}
                 onClick={() => setEditingOrder(order)}
               >
-                <CardContent className="p-6">
-                  <div className="flex flex-col md:flex-row justify-between gap-4">
+                <CardContent className="p-4 sm:p-6">
+                  <div className="flex flex-col gap-4 md:flex-row md:justify-between">
                     <div className="space-y-2">
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <span className="text-lg font-bold text-foreground">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                        <span className="text-base font-bold text-foreground sm:text-lg">
                           {order.orderNumber}
                         </span>
                         <StatusBadge status={order.status} />
@@ -217,29 +218,29 @@ export default function Orders() {
                             {{"ENTREGUE": "Entregue", "NAO_AUTORIZADO": "Não autorizado", "DESCARTE_AUTORIZADO": "Descarte"}[order.finalStatus] || order.finalStatus}
                           </Badge>
                         )}
-                        <span className="text-sm text-muted-foreground">
+                        <span className="w-full text-xs text-muted-foreground sm:w-auto sm:text-sm">
                           {format(new Date(order.entryDate!), "dd/MM/yyyy")}
                         </span>
                       </div>
-                      <h3 className="text-xl font-semibold">{order.customer.name}</h3>
-                      <p className="text-muted-foreground">
+                      <h3 className="text-lg font-semibold sm:text-xl">{order.customer.name}</h3>
+                      <p className="break-words text-sm text-muted-foreground sm:text-base">
                         {order.appliance.type} {order.appliance.brand} - {order.defect}
                       </p>
                     </div>
                     
-                    <div className="flex flex-col items-end gap-2 justify-between">
-                      <div className="text-right">
+                    <div className="flex flex-col gap-3 border-t pt-3 md:items-end md:border-t-0 md:pt-0">
+                      <div className="text-left md:text-right">
                         <p className="text-sm text-muted-foreground">Total Estimado</p>
-                        <p className="text-2xl font-bold text-primary">
+                        <p className="text-xl font-bold text-primary sm:text-2xl">
                           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(order.totalValue))}
                         </p>
                       </div>
                       
-                      <div className="flex gap-2">
+                      <div className="flex items-stretch gap-2 md:justify-end">
                         <Button 
                           size="sm" 
                           variant="outline" 
-                          className="text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200"
+                          className="min-h-10 flex-1 border-green-200 text-green-600 hover:bg-green-50 hover:text-green-700 sm:w-auto sm:flex-none"
                           onClick={(e) => {
                             e.stopPropagation();
                             const trackingUrl = order.trackingToken 
@@ -255,7 +256,7 @@ export default function Orders() {
 
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button size="sm" variant="ghost">
+                            <Button size="sm" variant="ghost" className="min-h-10 shrink-0 px-3">
                               <MoreVertical className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -307,7 +308,7 @@ export default function Orders() {
 
       {/* Edit/Details Dialog */}
       <Dialog open={!!editingOrder} onOpenChange={(open) => !open && setEditingOrder(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[90vh] max-w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-2xl">
           {editingOrder && (
             <OrderDetails 
               order={editingOrder} 
@@ -323,7 +324,7 @@ export default function Orders() {
 
       {/* Finalization Dialog */}
       <Dialog open={!!finalizingOrder} onOpenChange={(open) => !open && setFinalizingOrder(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-md">
           {finalizingOrder && (
             <FinalizationForm 
               order={finalizingOrder} 
@@ -376,7 +377,7 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
   return (
     <>
       <DialogHeader>
-        <DialogTitle className="flex items-center gap-3">
+        <DialogTitle className="flex flex-wrap items-center gap-2 sm:gap-3">
           <span>{order.orderNumber}</span>
           <StatusBadge status={order.status} />
           {order.finalStatus && (
@@ -386,10 +387,11 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
       </DialogHeader>
 
       {/* Quick Actions */}
-      <div className="flex flex-wrap gap-2 py-2">
+      <div className="flex flex-col gap-2 py-2 sm:flex-row sm:flex-wrap">
         <Button 
           size="sm" 
           variant="outline"
+          className="min-h-10 justify-start"
           onClick={() => window.open(`/print/receipt/${order.id}`, '_blank')}
         >
           <Printer className="w-4 h-4 mr-2" /> Nota de Entrada
@@ -397,6 +399,7 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
         <Button 
           size="sm" 
           variant="outline"
+          className="min-h-10 justify-start"
           onClick={() => window.open(`/print/label/${order.id}`, '_blank')}
         >
           <Tag className="w-4 h-4 mr-2" /> Etiqueta
@@ -405,7 +408,7 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
           <Button 
             size="sm" 
             variant="outline"
-            className="text-blue-600"
+            className="min-h-10 justify-start text-blue-600"
             onClick={() => window.open(`/print/exit/${order.id}`, '_blank')}
           >
             <Printer className="w-4 h-4 mr-2" /> Nota de Saída
@@ -414,7 +417,7 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
         <Button 
           size="sm" 
           variant="outline"
-          className="text-green-600"
+          className="min-h-10 justify-start text-green-600"
           onClick={() => {
             const message = `Olá ${order.customer.name}!\n\nSua OS ${order.orderNumber} está com status: *${order.status}*\n\n${trackingUrl ? `Acompanhe online: ${trackingUrl}` : ''}`;
             window.open(`https://wa.me/55${order.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
@@ -425,6 +428,7 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
         <Button 
           size="sm" 
           variant="outline"
+          className="min-h-10 justify-start"
           onClick={() => {
             const subject = `OS #${order.id} - ${order.appliance.type} ${order.appliance.brand}`;
             const body = `Olá ${order.customer.name},\n\nSua OS ${order.orderNumber} está com status: ${order.status}\n\nAparelho: ${order.appliance.type} ${order.appliance.brand} ${order.appliance.model}\nDefeito: ${order.defect}\n\n${trackingUrl ? `Acompanhe online: ${trackingUrl}` : ''}\n\nAtenciosamente,\nTechRepair`;
@@ -438,11 +442,12 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
       <Separator />
 
       {/* Customer & Appliance Info */}
-      <div className="grid grid-cols-2 gap-4 py-2 text-sm">
+      <div className="grid grid-cols-1 gap-4 py-2 text-sm sm:grid-cols-2">
         <div>
           <p className="text-muted-foreground">Cliente</p>
           <p className="font-medium">{order.customer.name}</p>
           <p className="text-muted-foreground">{order.customer.phone}</p>
+          <p className="text-muted-foreground">{order.customer.address || "Não informado"}</p>
         </div>
         <div>
           <p className="text-muted-foreground">Aparelho</p>
@@ -481,7 +486,7 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
             )}
           />
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField
               control={form.control}
               name="status"
@@ -507,7 +512,7 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
               )}
             />
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <FormField
                 control={form.control}
                 name="serviceValue"
@@ -535,9 +540,9 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
             </div>
           </div>
 
-          <div className="bg-muted p-4 rounded-lg flex justify-between items-center">
+          <div className="flex items-center justify-between rounded-lg bg-muted p-4">
             <span className="font-semibold">Total:</span>
-            <span className="text-xl font-bold text-primary">
+            <span className="text-lg font-bold text-primary sm:text-xl">
               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
                 Number(form.watch("serviceValue") || 0) + Number(form.watch("partsValue") || 0)
               )}
@@ -554,7 +559,7 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
             toast={toast}
           />
 
-          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+          <DialogFooter className="!flex-col gap-2 sm:!flex-row">
             {!isFinalized && (
               <Button 
                 type="button" 
@@ -610,18 +615,18 @@ function BudgetSection({ order, isFinalized, hasPermission, user, onUpdate, toas
   };
 
   return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen} className="border rounded-lg overflow-hidden shadow-sm">
+    <Collapsible open={isOpen} onOpenChange={setIsOpen} className="overflow-hidden rounded-lg border shadow-sm">
       <CollapsibleTrigger asChild>
-        <Button variant="ghost" className="w-full flex justify-between items-center p-4 h-auto hover:bg-muted/50 transition-colors">
-          <div className="flex items-center gap-2">
+        <Button variant="ghost" className="h-auto w-full justify-between p-4 transition-colors hover:bg-muted/50">
+          <div className="flex min-w-0 items-center gap-2">
             <FileText className="w-5 h-5 text-primary" />
-            <span className="font-semibold text-lg">Orçamento</span>
+            <span className="text-base font-semibold sm:text-lg">Orçamento</span>
             {order.budgetStatus && (
-              <Badge className={
+              <Badge className={`max-w-full ${
                 order.budgetStatus === "APROVADO" ? "bg-green-100 text-green-700" : 
                 order.budgetStatus === "RECUSADO" ? "bg-red-100 text-red-700" : 
                 "bg-orange-100 text-orange-700"
-              }>
+              }`}>
                 {order.budgetStatus.replace("_", " ")}
               </Badge>
             )}
@@ -630,7 +635,7 @@ function BudgetSection({ order, isFinalized, hasPermission, user, onUpdate, toas
         </Button>
       </CollapsibleTrigger>
       
-      <CollapsibleContent className="p-4 space-y-4 bg-card">
+      <CollapsibleContent className="space-y-4 bg-card p-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <label className="text-sm font-medium text-muted-foreground">Validade (dias)</label>
@@ -643,12 +648,12 @@ function BudgetSection({ order, isFinalized, hasPermission, user, onUpdate, toas
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-muted-foreground">Status do Orçamento</label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <Button 
                 type="button"
                 size="sm" 
                 variant={isBudgetPending ? "default" : "outline"}
-                className={isBudgetPending ? "bg-orange-600 hover:bg-orange-700" : "text-orange-600 border-orange-200"}
+                className={isBudgetPending ? "justify-start bg-orange-600 hover:bg-orange-700" : "justify-start text-orange-600 border-orange-200"}
                 onClick={() => handleStatusChange("AGUARDANDO_APROVACAO")}
                 disabled={isFinalized || !hasPermission("edit_budget")}
               >
@@ -660,7 +665,7 @@ function BudgetSection({ order, isFinalized, hasPermission, user, onUpdate, toas
                     type="button"
                     size="sm" 
                     variant={isBudgetApproved ? "default" : "outline"}
-                    className={isBudgetApproved ? "bg-green-600 hover:bg-green-700" : "text-green-600 border-green-200"}
+                    className={isBudgetApproved ? "justify-start bg-green-600 hover:bg-green-700" : "justify-start text-green-600 border-green-200"}
                     onClick={() => handleStatusChange("APROVADO")}
                     disabled={isFinalized}
                   >
@@ -670,7 +675,7 @@ function BudgetSection({ order, isFinalized, hasPermission, user, onUpdate, toas
                     type="button"
                     size="sm" 
                     variant={isBudgetRefused ? "default" : "outline"}
-                    className={isBudgetRefused ? "bg-red-600 hover:bg-red-700" : "text-red-600 border-red-200"}
+                    className={isBudgetRefused ? "justify-start bg-red-600 hover:bg-red-700" : "justify-start text-red-600 border-red-200"}
                     onClick={() => handleStatusChange("RECUSADO")}
                     disabled={isFinalized}
                   >
@@ -692,24 +697,24 @@ function BudgetSection({ order, isFinalized, hasPermission, user, onUpdate, toas
           />
         </div>
 
-        <div className="flex flex-wrap gap-2 pt-2 border-t">
+        <div className="flex flex-col gap-2 border-t pt-2 sm:flex-row sm:flex-wrap sm:items-center">
           <Button 
             type="button"
             size="sm" 
             variant="outline" 
-            className="text-green-600 border-green-200 hover:bg-green-50"
+            className="justify-start text-green-600 border-green-200 hover:bg-green-50"
             onClick={sendWhatsApp}
             disabled={!hasPermission("send_budget")}
           >
             <Send className="w-4 h-4 mr-2" /> Enviar p/ WhatsApp
           </Button>
           {order.budgetSentAt && (
-            <span className="text-xs text-muted-foreground flex items-center">
+            <span className="flex items-center text-xs text-muted-foreground">
               <CheckCircle2 className="w-3 h-3 mr-1" /> Enviado em {format(new Date(order.budgetSentAt), "dd/MM HH:mm")}
             </span>
           )}
           {order.budgetApprovedAt && (
-            <span className="text-xs text-muted-foreground flex items-center ml-auto">
+            <span className="flex items-center text-xs text-muted-foreground sm:ml-auto">
               Aprovado por {order.budgetApprovedBy} em {format(new Date(order.budgetApprovedAt), "dd/MM HH:mm")}
             </span>
           )}
@@ -904,11 +909,11 @@ function FinalizationForm({ order, onClose }: { order: any, onClose: () => void 
         </div>
       </div>
 
-      <DialogFooter>
-        <Button variant="outline" onClick={onClose} disabled={isPending}>
+      <DialogFooter className="!flex-col gap-2 sm:!flex-row">
+        <Button variant="outline" className="w-full sm:w-auto" onClick={onClose} disabled={isPending}>
           Cancelar
         </Button>
-        <Button onClick={handleFinalize} disabled={!finalStatus || isPending}>
+        <Button className="w-full sm:w-auto" onClick={handleFinalize} disabled={!finalStatus || isPending}>
           {isPending ? "Finalizando..." : "Confirmar Baixa"}
         </Button>
       </DialogFooter>

@@ -150,7 +150,7 @@ export default function NewOrder() {
   };
 
   // Validate form
-  const isCustomerValid = selectedCustomer || (isNewCustomer && newCustomerData.name && newCustomerData.phone);
+  const isCustomerValid = selectedCustomer || (isNewCustomer && newCustomerData.name && newCustomerData.phone && newCustomerData.address?.trim());
   const isApplianceValid = selectedAppliance || (isNewAppliance && newApplianceData.type && newApplianceData.brand && newApplianceData.model);
   const isDefectValid = defect.trim().length > 0;
   const canSubmit = isCustomerValid && isApplianceValid && isDefectValid;
@@ -166,7 +166,7 @@ export default function NewOrder() {
         const newCustomer = await createCustomer({
           name: newCustomerData.name!,
           phone: newCustomerData.phone!,
-          address: newCustomerData.address || null,
+          address: newCustomerData.address!.trim(),
           notes: newCustomerData.notes || null
         });
         customerId = newCustomer.id;
@@ -227,14 +227,14 @@ export default function NewOrder() {
       : null;
 
     return (
-      <div className="max-w-lg mx-auto space-y-6 py-8">
+      <div className="mx-auto max-w-lg space-y-5 py-4 sm:space-y-6 sm:py-8">
         <Card className="text-center border-green-200 bg-green-50/50">
-          <CardContent className="pt-8 pb-6 space-y-4">
-            <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="h-8 w-8 text-green-600" />
+          <CardContent className="space-y-4 px-4 pb-5 pt-6 sm:pt-8 sm:pb-6">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100 sm:h-16 sm:w-16">
+              <CheckCircle2 className="h-7 w-7 text-green-600 sm:h-8 sm:w-8" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-green-900">OS Criada com Sucesso!</h2>
+              <h2 className="text-xl font-bold text-green-900 sm:text-2xl">OS Criada com Sucesso!</h2>
               <p className="text-green-700 mt-1">Ordem de Serviço #{createdOrder.id} registrada.</p>
             </div>
           </CardContent>
@@ -247,7 +247,7 @@ export default function NewOrder() {
           </CardHeader>
           <CardContent className="space-y-3">
             <Button
-              className="w-full justify-start h-12"
+              className="h-12 w-full justify-start text-left"
               variant="outline"
               onClick={() => window.open(`/print/receipt/${createdOrder.id}`, '_blank')}
               data-testid="button-print-receipt"
@@ -257,7 +257,7 @@ export default function NewOrder() {
             </Button>
             
             <Button
-              className="w-full justify-start h-12"
+              className="h-12 w-full justify-start text-left"
               variant="outline"
               onClick={() => window.open(`/print/label/${createdOrder.id}`, '_blank')}
               data-testid="button-print-label"
@@ -269,7 +269,7 @@ export default function NewOrder() {
             <Separator />
 
             <Button
-              className="w-full justify-start h-12 text-green-600"
+              className="h-12 w-full justify-start text-left text-green-600"
               variant="outline"
               onClick={() => {
                 const message = `Olá ${createdOrder.customerName}!\n\nSua OS ${createdOrder.orderNumber} foi registrada com sucesso.\n\n${trackingUrl ? `Acompanhe online: ${trackingUrl}` : ''}`;
@@ -283,7 +283,7 @@ export default function NewOrder() {
           </CardContent>
         </Card>
 
-        <div className="flex gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
           <Button
             variant="outline"
             className="flex-1"
@@ -317,34 +317,34 @@ export default function NewOrder() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="mx-auto max-w-3xl space-y-5 sm:space-y-6">
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">Nova Ordem de Serviço</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Nova Ordem de Serviço</h1>
         <p className="text-muted-foreground">Registre um novo serviço de forma rápida e simples.</p>
       </div>
 
       {/* Step 1: Customer */}
       <Card className={selectedCustomer || isNewCustomer ? "border-primary/30 bg-primary/5" : ""}>
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-3">
-            <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold ${
+        <CardHeader className="px-4 pb-3 pt-5 sm:px-6">
+          <div className="flex items-start gap-3 sm:items-center">
+            <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold sm:mt-0 ${
               selectedCustomer || isNewCustomer ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
             }`}>
               {selectedCustomer || isNewCustomer ? <CheckCircle2 className="h-5 w-5" /> : "1"}
             </div>
-            <div>
+            <div className="min-w-0">
               <CardTitle className="text-lg">Cliente</CardTitle>
               <CardDescription>Busque pelo nome ou telefone</CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 px-4 pb-5 sm:px-6">
           {!isNewCustomer && (
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Digite o nome ou telefone do cliente..."
-                className="pl-10 h-12 text-lg"
+                className="h-12 pl-10 text-base sm:text-lg"
                 value={customerSearch}
                 onChange={(e) => {
                   setCustomerSearch(e.target.value);
@@ -357,20 +357,20 @@ export default function NewOrder() {
               
               {/* Autocomplete dropdown */}
               {customerSearch && !selectedCustomer && (filteredCustomers.length > 0 || showNewCustomerOption) && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-card border rounded-lg shadow-lg z-50 overflow-hidden">
+                <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[min(60vh,24rem)] overflow-y-auto rounded-xl border bg-card shadow-lg">
                   {filteredCustomers.map((customer) => (
                     <div
                       key={customer.id}
-                      className="flex items-center gap-3 p-3 hover:bg-muted cursor-pointer transition-colors"
+                      className="flex cursor-pointer items-start gap-3 p-3 transition-colors hover:bg-muted sm:items-center"
                       onClick={() => handleSelectCustomer(customer)}
                       data-testid={`customer-option-${customer.id}`}
                     >
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold">
                         {customer.name[0].toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate">{customer.name}</p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="break-words text-sm text-muted-foreground">
                           Cliente #{customer.id}
                           {customer.phone ? ` • ${customer.phone}` : ""}
                         </p>
@@ -382,15 +382,15 @@ export default function NewOrder() {
                     <>
                       {filteredCustomers.length > 0 && <Separator />}
                       <div
-                        className="flex items-center gap-3 p-3 hover:bg-primary/10 cursor-pointer transition-colors text-primary"
+                        className="flex cursor-pointer items-start gap-3 p-3 text-primary transition-colors hover:bg-primary/10 sm:items-center"
                         onClick={handleStartNewCustomer}
                         data-testid="button-new-customer"
                       >
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
                           <Plus className="h-5 w-5" />
                         </div>
-                        <div>
-                          <p className="font-medium">Cadastrar "{customerSearch}"</p>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">Cadastrar "{customerSearch}"</p>
                           <p className="text-sm text-muted-foreground">
                             Criar novo cadastro mesmo se houver nomes parecidos
                           </p>
@@ -405,14 +405,14 @@ export default function NewOrder() {
 
           {/* Selected customer info */}
           {selectedCustomer && (
-            <div className="flex items-center justify-between p-4 bg-card rounded-lg border">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
+            <div className="flex flex-col gap-4 rounded-xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3 sm:gap-4 sm:items-center">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-base font-bold text-primary sm:h-12 sm:w-12 sm:text-lg">
                   {selectedCustomer.name[0].toUpperCase()}
                 </div>
-                <div>
-                  <p className="font-semibold text-lg">{selectedCustomer.name}</p>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <div className="min-w-0">
+                  <p className="text-base font-semibold sm:text-lg break-words">{selectedCustomer.name}</p>
+                  <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
                     <span className="flex items-center gap-1">
                       <Phone className="h-3 w-3" /> {selectedCustomer.phone}
                     </span>
@@ -427,6 +427,7 @@ export default function NewOrder() {
               <Button 
                 variant="ghost" 
                 size="sm"
+                className="h-10 self-stretch sm:h-9 sm:self-auto"
                 onClick={() => {
                   setSelectedCustomer(null);
                   setCustomerSearch("");
@@ -440,12 +441,13 @@ export default function NewOrder() {
 
           {/* New customer form */}
           {isNewCustomer && (
-            <div className="space-y-4 p-4 bg-card rounded-lg border">
-              <div className="flex items-center justify-between">
+            <div className="space-y-4 rounded-xl border bg-card p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <Badge variant="secondary">Novo Cliente</Badge>
                 <Button 
                   variant="ghost" 
                   size="sm"
+                  className="self-start sm:self-auto"
                   onClick={() => {
                     setIsNewCustomer(false);
                     setCustomerSearch("");
@@ -477,13 +479,16 @@ export default function NewOrder() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Endereço</label>
+                  <label className="text-sm font-medium">Endereço *</label>
                   <Input
                     placeholder="Rua, número, bairro"
                     value={newCustomerData.address || ""}
                     onChange={(e) => setNewCustomerData({...newCustomerData, address: e.target.value})}
                     data-testid="input-new-customer-address"
                   />
+                  {!newCustomerData.address?.trim() && (
+                    <p className="text-xs text-destructive">Informe o endereço do cliente.</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -493,20 +498,20 @@ export default function NewOrder() {
 
       {/* Step 2: Appliance */}
       <Card className={`transition-opacity ${!isCustomerValid ? "opacity-50 pointer-events-none" : ""} ${selectedAppliance || isNewAppliance ? "border-primary/30 bg-primary/5" : ""}`}>
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-3">
-            <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold ${
+        <CardHeader className="px-4 pb-3 pt-5 sm:px-6">
+          <div className="flex items-start gap-3 sm:items-center">
+            <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold sm:mt-0 ${
               selectedAppliance || isNewAppliance ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
             }`}>
               {selectedAppliance || isNewAppliance ? <CheckCircle2 className="h-5 w-5" /> : "2"}
             </div>
-            <div>
+            <div className="min-w-0">
               <CardTitle className="text-lg">Aparelho</CardTitle>
               <CardDescription>Selecione ou cadastre o aparelho</CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 px-4 pb-5 sm:px-6">
           {selectedCustomer && !isNewCustomer && (
             <Select 
               onValueChange={handleSelectAppliance}
@@ -548,13 +553,14 @@ export default function NewOrder() {
 
           {/* New appliance form */}
           {isNewAppliance && (
-            <div className="space-y-4 p-4 bg-card rounded-lg border">
-              <div className="flex items-center justify-between">
+            <div className="space-y-4 rounded-xl border bg-card p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <Badge variant="secondary">Novo Aparelho</Badge>
                 {!isNewCustomer && (
                   <Button 
                     variant="ghost" 
                     size="sm"
+                    className="self-start sm:self-auto"
                     onClick={() => setIsNewAppliance(false)}
                   >
                     Cancelar
@@ -609,12 +615,12 @@ export default function NewOrder() {
 
           {/* Selected appliance info */}
           {selectedAppliance && !isNewAppliance && (
-            <div className="flex items-center gap-4 p-4 bg-card rounded-lg border">
-              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+            <div className="flex items-start gap-3 rounded-xl border bg-card p-4 sm:items-center sm:gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:h-12 sm:w-12">
                 <Wrench className="h-6 w-6 text-primary" />
               </div>
-              <div className="flex-1">
-                <p className="font-semibold">{selectedAppliance.type} - {selectedAppliance.brand}</p>
+              <div className="min-w-0 flex-1">
+                <p className="break-words font-semibold">{selectedAppliance.type} - {selectedAppliance.brand}</p>
                 <p className="text-sm text-muted-foreground">Modelo: {selectedAppliance.model}</p>
               </div>
             </div>
@@ -624,25 +630,25 @@ export default function NewOrder() {
 
       {/* Step 3: Service Order Details */}
       <Card className={`transition-opacity ${!isApplianceValid ? "opacity-50 pointer-events-none" : ""} ${isDefectValid ? "border-primary/30 bg-primary/5" : ""}`}>
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-3">
-            <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold ${
+        <CardHeader className="px-4 pb-3 pt-5 sm:px-6">
+          <div className="flex items-start gap-3 sm:items-center">
+            <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold sm:mt-0 ${
               isDefectValid ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
             }`}>
               {isDefectValid ? <CheckCircle2 className="h-5 w-5" /> : "3"}
             </div>
-            <div>
+            <div className="min-w-0">
               <CardTitle className="text-lg">Problema</CardTitle>
               <CardDescription>Descreva o defeito relatado pelo cliente</CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 px-4 pb-5 sm:px-6">
           <div className="space-y-2">
             <label className="text-sm font-medium">O que está acontecendo com o aparelho? *</label>
             <Textarea
               placeholder="Ex: Não está gelando, faz barulho estranho, não liga..."
-              className="min-h-[100px] text-base"
+              className="min-h-[110px] text-base"
               value={defect}
               onChange={(e) => setDefect(e.target.value)}
               data-testid="input-defect"
@@ -652,7 +658,7 @@ export default function NewOrder() {
             <label className="text-sm font-medium">Observações internas</label>
             <Textarea
               placeholder="Anotações para uso interno (opcional)"
-              className="min-h-[60px]"
+              className="min-h-[88px]"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               data-testid="input-notes"
@@ -665,17 +671,17 @@ export default function NewOrder() {
       </Card>
 
       {/* Submit */}
-      <div className="flex flex-col sm:flex-row gap-4 pt-4">
+      <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:gap-4 sm:pt-4">
         <Button
           variant="outline"
-          className="flex-1"
+          className="h-11 flex-1 sm:h-12"
           onClick={() => setLocation("/orders")}
           disabled={isSubmitting}
         >
           Cancelar
         </Button>
         <Button
-          className="flex-1 h-12 text-lg shadow-lg hover:shadow-xl transition-shadow"
+          className="h-12 flex-1 text-base shadow-lg transition-shadow hover:shadow-xl sm:text-lg"
           onClick={handleSubmit}
           disabled={!canSubmit || isSubmitting}
           data-testid="button-submit-order"
@@ -696,7 +702,7 @@ export default function NewOrder() {
 
       {/* Help text */}
       {!canSubmit && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground justify-center">
+        <div className="flex items-center justify-center gap-2 px-2 text-center text-sm text-muted-foreground">
           <AlertCircle className="h-4 w-4" />
           <span>Preencha todos os campos obrigatórios para continuar</span>
         </div>

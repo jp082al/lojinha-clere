@@ -190,6 +190,7 @@ export default function PrintExit() {
           <div className="label">Cliente</div>
           <div className="bold">{order.customer.name}</div>
           <div>Tel: {order.customer.phone}</div>
+          <div>End: {order.customer.address || "Nao informado"}</div>
         </div>
 
         <div className="divider" />

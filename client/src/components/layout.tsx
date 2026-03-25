@@ -185,17 +185,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" className="md:hidden fixed top-4 right-4 z-40 bg-card shadow-md">
+          <Button variant="ghost" size="icon" className="md:hidden fixed top-3 right-3 z-40 h-11 w-11 bg-card shadow-md">
             <Menu className="h-6 w-6" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="p-0 w-64 border-r-0">
+        <SheetContent side="left" className="w-[85vw] max-w-64 border-r-0 p-0">
           <Sidebar />
         </SheetContent>
       </Sheet>
 
-      <main className="flex-1 md:ml-64 p-4 md:p-8 overflow-y-auto">
-        <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
+      <main className="flex-1 overflow-y-auto p-3 pt-16 sm:p-4 sm:pt-20 md:ml-64 md:p-8 md:pt-8">
+        <div className="mx-auto max-w-7xl space-y-6 animate-in fade-in duration-500 md:space-y-8">
           {children}
         </div>
       </main>

@@ -109,15 +109,15 @@ export default function PickupWarningsPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 md:space-y-8">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Avisos de retirada</h2>
+        <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Avisos de retirada</h2>
         <p className="text-muted-foreground mt-2">
           OS com mais de 90 dias desde a entrada, ainda sem baixa e sem retirada.
         </p>
       </div>
 
-      <div className="grid gap-3 rounded-2xl border bg-background/80 p-4 shadow-sm md:grid-cols-[1fr_240px]">
+      <div className="grid gap-3 rounded-2xl border bg-background/80 p-3 shadow-sm sm:p-4 md:grid-cols-[1fr_240px]">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
             Busca
@@ -146,9 +146,9 @@ export default function PickupWarningsPage() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {[1, 2, 3].map((item) => (
-            <div key={item} className="h-40 rounded-2xl bg-muted/20 animate-pulse" />
+            <div key={item} className="h-32 rounded-2xl bg-muted/20 animate-pulse sm:h-40" />
           ))}
         </div>
       ) : filteredOrders.length === 0 ? (
@@ -175,7 +175,7 @@ export default function PickupWarningsPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-2 sm:gap-3">
           {filteredOrders.map((order) => {
             const normalizedPhone = normalizePhone(order.customer.phone || "");
             const canSendWhatsapp = !!normalizedPhone;
@@ -184,116 +184,116 @@ export default function PickupWarningsPage() {
 
             return (
               <Card key={order.id} className="overflow-hidden border-orange-200 bg-orange-50/20 shadow-sm">
-                <CardContent className="p-4">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="min-w-0 flex-1 space-y-3">
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-white px-3 py-1 text-sm font-bold tracking-tight text-orange-900 shadow-sm ring-1 ring-orange-200 sm:text-base">
+                <CardContent className="p-2.5 sm:p-4">
+                  <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+                        <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2">
+                          <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold leading-none tracking-tight text-orange-900 shadow-sm ring-1 ring-orange-200 sm:text-sm lg:text-base">
                             {order.orderNumber || `OS #${order.id}`}
                           </span>
-                          <Badge variant="secondary" className="h-6 px-2 text-[11px]">
+                          <Badge variant="secondary" className="h-5 px-2 text-[10px] sm:h-6 sm:text-[11px]">
                             {order.status}
                           </Badge>
                           {warningSent && (
                             <Badge
                               variant="outline"
-                              className={`h-6 px-2 text-[11px] ${isExpired ? "border-red-300 text-red-700" : "border-orange-300 text-orange-700"}`}
+                              className={`h-5 px-2 text-[10px] sm:h-6 sm:text-[11px] ${isExpired ? "border-red-300 text-red-700" : "border-orange-300 text-orange-700"}`}
                             >
                               {isExpired ? "Tempo expirado" : "Avisado"}
                             </Badge>
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2 rounded-xl border border-orange-200 bg-white px-3 py-2 shadow-sm">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        <div className="flex w-fit items-center gap-1.5 rounded-xl border border-orange-200 bg-white px-2 py-1 shadow-sm sm:self-start lg:self-auto">
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                             Dias parados
                           </p>
-                          <p className="text-xl font-black leading-none text-orange-700">
+                          <p className="text-base font-black leading-none text-orange-700 sm:text-xl">
                             {order.daysPending}
                           </p>
                         </div>
                       </div>
 
-                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                        <div className="rounded-xl border bg-background/80 px-3 py-2.5 shadow-sm">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      <div className="grid grid-cols-2 gap-1.5 sm:gap-3 xl:grid-cols-4">
+                        <div className="rounded-xl border bg-background/80 px-2 py-1.5 shadow-sm sm:px-3 sm:py-2.5">
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:text-[10px] sm:tracking-[0.18em]">
                             Cliente
                           </p>
-                          <p className="mt-1 truncate text-sm font-semibold text-foreground sm:text-base">
+                          <p className="mt-0.5 line-clamp-2 break-words text-[11px] font-semibold leading-snug text-foreground sm:mt-1 sm:text-sm lg:text-base">
                             {order.customer.name}
                           </p>
                         </div>
 
-                        <div className="rounded-xl border bg-background/80 px-3 py-2.5 shadow-sm">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        <div className="rounded-xl border bg-background/80 px-2 py-1.5 shadow-sm sm:px-3 sm:py-2.5">
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:text-[10px] sm:tracking-[0.18em]">
                             Telefone
                           </p>
-                          <p className="mt-1 text-sm font-semibold text-foreground sm:text-base">
+                          <p className="mt-0.5 break-words text-[11px] font-semibold leading-snug text-foreground sm:mt-1 sm:text-sm lg:text-base">
                             {order.customer.phone ? formatPhone(order.customer.phone) : "Nao informado"}
                           </p>
                           {!canSendWhatsapp && (
-                            <p className="mt-1 text-xs font-medium text-red-700">
+                            <p className="mt-0.5 text-[10px] font-medium leading-snug text-red-700 sm:mt-1 sm:text-[11px]">
                               Telefone ausente ou invalido para WhatsApp.
                             </p>
                           )}
                         </div>
 
-                        <div className="rounded-xl border bg-background/80 px-3 py-2.5 shadow-sm">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        <div className="rounded-xl border bg-background/80 px-2 py-1.5 shadow-sm sm:px-3 sm:py-2.5">
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:text-[10px] sm:tracking-[0.18em]">
                             Aparelho
                           </p>
-                          <p className="mt-1 text-sm font-semibold text-foreground sm:text-base">
+                          <p className="mt-0.5 line-clamp-2 break-words text-[11px] font-semibold leading-snug text-foreground sm:mt-1 sm:text-sm lg:text-base">
                             {order.appliance.type}
                           </p>
-                          <p className="mt-0.5 truncate text-xs text-muted-foreground sm:text-sm">
+                          <p className="mt-0.5 line-clamp-2 break-words text-[10px] leading-snug text-muted-foreground sm:text-xs lg:text-sm">
                             {order.appliance.brand} {order.appliance.model}
                           </p>
                         </div>
 
-                        <div className="rounded-xl border bg-background/80 px-3 py-2.5 shadow-sm">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        <div className="rounded-xl border bg-background/80 px-2 py-1.5 shadow-sm sm:px-3 sm:py-2.5">
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:text-[10px] sm:tracking-[0.18em]">
                             Entrada
                           </p>
-                          <p className="mt-1 text-sm font-semibold text-foreground sm:text-base">
+                          <p className="mt-0.5 text-[11px] font-semibold leading-snug text-foreground sm:mt-1 sm:text-sm lg:text-base">
                             {format(new Date(order.entryDate), "dd/MM/yyyy")}
                           </p>
                         </div>
                       </div>
 
-                      <div className="grid gap-3 lg:grid-cols-[1.1fr_1.1fr_0.8fr]">
-                        <div className="rounded-xl border bg-background/80 px-3 py-2.5 shadow-sm">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      <div className="grid gap-1.5 sm:gap-3 lg:grid-cols-[1.1fr_1.1fr_0.8fr]">
+                        <div className="rounded-xl border bg-background/80 px-2 py-1.5 shadow-sm sm:px-3 sm:py-2.5">
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:text-[10px] sm:tracking-[0.18em]">
                             Aviso enviado
                           </p>
-                          <p className="mt-1 text-sm text-foreground">
+                          <p className="mt-0.5 text-[11px] leading-snug text-foreground sm:mt-1 sm:text-sm">
                             {warningSent ? formatDateTime(warningSent.warningSentAt) : "Nenhum aviso registrado ainda."}
                           </p>
                         </div>
 
-                        <div className="rounded-xl border bg-background/80 px-3 py-2.5 shadow-sm">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        <div className="rounded-xl border bg-background/80 px-2 py-1.5 shadow-sm sm:px-3 sm:py-2.5">
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:text-[10px] sm:tracking-[0.18em]">
                             Prazo final
                           </p>
-                          <p className="mt-1 text-sm text-foreground">
+                          <p className="mt-0.5 text-[11px] leading-snug text-foreground sm:mt-1 sm:text-sm">
                             {warningSent ? formatDateTime(warningSent.warningDeadlineAt) : "Aguardando envio do aviso."}
                           </p>
                         </div>
 
-                        <div className="rounded-xl border bg-background/80 px-3 py-2.5 shadow-sm">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        <div className="rounded-xl border bg-background/80 px-2 py-1.5 shadow-sm sm:px-3 sm:py-2.5">
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:text-[10px] sm:tracking-[0.18em]">
                             Temporizador
                           </p>
-                          <p className={`mt-1 text-sm font-semibold ${warningSent ? (isExpired ? "text-red-700" : "text-orange-700") : "text-muted-foreground"}`}>
+                          <p className={`mt-0.5 text-[11px] font-semibold leading-snug sm:mt-1 sm:text-sm ${warningSent ? (isExpired ? "text-red-700" : "text-orange-700") : "text-muted-foreground"}`}>
                             {warningSent ? formatCountdown(warningSent.warningDeadlineAt) : "Nao iniciado"}
                           </p>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex min-w-[190px] flex-col justify-center gap-2 lg:items-end">
+                    <div className="flex flex-col justify-center gap-1 lg:min-w-[190px] lg:items-end">
                       <Button
-                        className="h-10 w-full bg-green-600 px-4 text-sm font-semibold hover:bg-green-700 lg:w-auto"
+                        className="h-10 w-full bg-green-600 px-3 text-sm font-semibold hover:bg-green-700 lg:w-auto"
                         disabled={!canSendWhatsapp || isPending}
                         onClick={async () => {
                           if (!normalizedPhone) return;
@@ -315,7 +315,7 @@ export default function PickupWarningsPage() {
                         <MessageSquare className="mr-2 h-4 w-4" />
                         {warningSent ? "Abrir WhatsApp" : "Registrar e avisar"}
                       </Button>
-                      <p className="text-[11px] text-muted-foreground lg:max-w-[190px] lg:text-right">
+                      <p className="text-[10px] leading-snug text-muted-foreground lg:max-w-[190px] lg:text-right">
                         Use este atalho para abrir a conversa com a mensagem pronta.
                       </p>
                     </div>
