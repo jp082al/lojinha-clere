@@ -35,6 +35,27 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import type { Customer, Appliance, InsertCustomer, InsertAppliance } from "@shared/schema";
 
+function getPhoneDigits(value: string) {
+  return value.replace(/\D/g, "").slice(0, 11);
+}
+
+function formatPhone(value: string) {
+  const digits = getPhoneDigits(value);
+
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)})${digits.slice(2)}`;
+
+  return `(${digits.slice(0, 2)})${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+function isPhoneSearch(value: string) {
+  const trimmed = value.trim();
+  const digits = getPhoneDigits(trimmed);
+  const nonPhoneChars = trimmed.replace(/[0-9()\-\s+]/g, "");
+
+  return digits.length >= 8 && nonPhoneChars.length === 0;
+}
+
 export default function NewOrder() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -76,16 +97,16 @@ export default function NewOrder() {
   const filteredCustomers = useMemo(() => {
     if (!customerSearch.trim() || !customers) return [];
     const search = customerSearch.toLowerCase();
+    const searchDigits = getPhoneDigits(customerSearch);
+
     return customers.filter(c => 
       c.name.toLowerCase().includes(search) || 
-      c.phone.includes(search)
+      (searchDigits.length > 0 && getPhoneDigits(c.phone).includes(searchDigits))
     ).slice(0, 5);
   }, [customerSearch, customers]);
 
-  // Check if we should show "create new customer" option
-  const showNewCustomerOption = customerSearch.trim().length >= 2 && 
-    !selectedCustomer && 
-    !filteredCustomers.some(c => c.name.toLowerCase() === customerSearch.toLowerCase());
+  // Keep the option to register a new customer available even when there are name matches.
+  const showNewCustomerOption = customerSearch.trim().length >= 2 && !selectedCustomer;
 
   // Reset appliance when customer changes
   useEffect(() => {
@@ -102,11 +123,13 @@ export default function NewOrder() {
 
   // Handle starting new customer creation
   const handleStartNewCustomer = () => {
+    const phoneSearch = isPhoneSearch(customerSearch);
+
     setIsNewCustomer(true);
     setSelectedCustomer(null);
     setNewCustomerData({
-      name: customerSearch,
-      phone: "",
+      name: phoneSearch ? "" : customerSearch,
+      phone: phoneSearch ? formatPhone(customerSearch) : "",
       address: "",
       notes: ""
     });
@@ -167,7 +190,8 @@ export default function NewOrder() {
           customerId: customerId,
           applianceId: applianceId,
           defect: defect,
-          diagnosis: notes || null,
+          observations: notes || null,
+          diagnosis: null,
           status: "Recebido",
           serviceValue: "0",
           partsValue: "0",
@@ -346,7 +370,10 @@ export default function NewOrder() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate">{customer.name}</p>
-                        <p className="text-sm text-muted-foreground">{customer.phone}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Cliente #{customer.id}
+                          {customer.phone ? ` • ${customer.phone}` : ""}
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -364,7 +391,9 @@ export default function NewOrder() {
                         </div>
                         <div>
                           <p className="font-medium">Cadastrar "{customerSearch}"</p>
-                          <p className="text-sm text-muted-foreground">Cliente não encontrado</p>
+                          <p className="text-sm text-muted-foreground">
+                            Criar novo cadastro mesmo se houver nomes parecidos
+                          </p>
                         </div>
                       </div>
                     </>
@@ -441,8 +470,8 @@ export default function NewOrder() {
                     <label className="text-sm font-medium">Telefone / WhatsApp *</label>
                     <Input
                       placeholder="(00) 00000-0000"
-                      value={newCustomerData.phone}
-                      onChange={(e) => setNewCustomerData({...newCustomerData, phone: e.target.value})}
+                      value={newCustomerData.phone || ""}
+                      onChange={(e) => setNewCustomerData({...newCustomerData, phone: formatPhone(e.target.value)})}
                       data-testid="input-new-customer-phone"
                     />
                   </div>
@@ -628,6 +657,9 @@ export default function NewOrder() {
               onChange={(e) => setNotes(e.target.value)}
               data-testid="input-notes"
             />
+            <p className="text-xs text-muted-foreground">
+              Este campo nao alimenta o diagnostico tecnico nem a impressao da OS.
+            </p>
           </div>
         </CardContent>
       </Card>

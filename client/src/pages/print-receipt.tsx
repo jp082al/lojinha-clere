@@ -47,6 +47,7 @@ export default function PrintReceipt() {
   const trackingUrl = order.trackingToken 
     ? `${window.location.origin}/acompanhamento/${order.trackingToken}`
     : null;
+  const entryObservations = order.observations || order.diagnosis;
 
   return (
     <>
@@ -188,12 +189,12 @@ export default function PrintReceipt() {
           <div>{order.defect}</div>
         </div>
 
-        {order.diagnosis && (
+        {entryObservations && (
           <>
             <div className="divider" />
             <div className="section">
               <div className="label">Observações</div>
-              <div>{order.diagnosis}</div>
+              <div style={{ whiteSpace: "pre-wrap" }}>{entryObservations}</div>
             </div>
           </>
         )}
