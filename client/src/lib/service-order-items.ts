@@ -73,6 +73,10 @@ export function getOrderItems(order: LegacyOrderLike) {
   }];
 }
 
+export function hasOrderItems(order: LegacyOrderLike) {
+  return Boolean(order.items?.length);
+}
+
 export function isOrderItemFinalized(item: {
   status?: string | null;
   finalStatus?: string | null;

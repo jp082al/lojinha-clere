@@ -6,7 +6,7 @@ import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { type SystemSettings } from "@shared/schema";
-import { getOrderItemsSummary, isOrderItemFinalized } from "@/lib/service-order-items";
+import { getOrderItemsSummary, hasOrderItems, isOrderItemFinalized } from "@/lib/service-order-items";
 import { useAppliances } from "@/hooks/use-appliances";
 
 export default function PrintExit() {
@@ -52,15 +52,34 @@ export default function PrintExit() {
   }
 
   const itemSummaries = getOrderItemsSummary(order, appliances);
-  const printableItems = selectedItemNumbers.length
+  const orderHasItems = hasOrderItems(order);
+  const explicitlySelectedItems = selectedItemNumbers.length
     ? itemSummaries.filter((item) => selectedItemNumbers.includes(item.itemNumber))
-    : itemSummaries;
-  const displayedItems = printableItems.length ? printableItems : itemSummaries;
-  const serviceVal = displayedItems.reduce((sum, item) => sum + item.serviceValue, 0) || Number(order.serviceValue) || 0;
-  const partsVal = displayedItems.reduce((sum, item) => sum + item.partsValue, 0) || Number(order.partsValue) || 0;
-  const totalVal = displayedItems.reduce((sum, item) => sum + item.totalValue, 0) || Number(order.totalValue) || (serviceVal + partsVal);
-  const warrantyDays = displayedItems[0]?.warrantyDays || order.warrantyDays || 90;
+    : [];
+  const finalizedItems = itemSummaries.filter((item) => isOrderItemFinalized(item));
+  const displayedItems = explicitlySelectedItems.length
+    ? explicitlySelectedItems
+    : orderHasItems
+      ? (finalizedItems.length ? finalizedItems : itemSummaries)
+      : itemSummaries;
+  const serviceVal = orderHasItems
+    ? displayedItems.reduce((sum, item) => sum + item.serviceValue, 0)
+    : Number(order.serviceValue ?? 0);
+  const partsVal = orderHasItems
+    ? displayedItems.reduce((sum, item) => sum + item.partsValue, 0)
+    : Number(order.partsValue ?? 0);
+  const totalVal = orderHasItems
+    ? displayedItems.reduce((sum, item) => sum + item.totalValue, 0)
+    : Number(order.totalValue ?? (serviceVal + partsVal));
+  const warrantyDays = displayedItems[0]?.warrantyDays ?? order.warrantyDays ?? 90;
   const customerAddress = order.customer.address || "Não informado";
+  const deliveredTo = displayedItems
+    .map((item) => item.deliveredTo)
+    .find(Boolean) ?? order.deliveredTo;
+  const finalNotes = displayedItems
+    .map((item) => item.finalNotes)
+    .filter(Boolean)
+    .join("\n\n") || order.finalNotes;
   const exitDate = displayedItems
     .map((item) => item.exitDate)
     .filter(Boolean)
@@ -70,7 +89,10 @@ export default function PrintExit() {
     .map((item) => item.finalizedBy)
     .filter(Boolean)
     .at(-1) || order.finalizedBy;
-  const isPartialExit = displayedItems.length < itemSummaries.length || itemSummaries.some((item) => !isOrderItemFinalized(item));
+  const paymentMethod = order.paymentMethod || null;
+  const isPartialExit = orderHasItems
+    ? displayedItems.length < itemSummaries.length || itemSummaries.some((item) => !isOrderItemFinalized(item))
+    : false;
 
   return (
     <>
@@ -241,7 +263,7 @@ export default function PrintExit() {
               <>
                 <div className="divider" />
                 <div className="section">
-                  <div className="label">Diagnóstico</div>
+                  <div className="label">Diagnóstico / Serviço Realizado</div>
                   <div style={{ whiteSpace: "pre-wrap" }}>{item.diagnosis}</div>
                 </div>
               </>
@@ -292,6 +314,26 @@ export default function PrintExit() {
           </>
         )}
 
+        {deliveredTo && (
+          <>
+            <div className="divider" />
+            <div className="section">
+              <div className="label">Entregue Para</div>
+              <div className="bold">{deliveredTo}</div>
+            </div>
+          </>
+        )}
+
+        {finalNotes && (
+          <>
+            <div className="divider" />
+            <div className="section">
+              <div className="label">Observações Finais</div>
+              <div style={{ whiteSpace: "pre-wrap" }}>{finalNotes}</div>
+            </div>
+          </>
+        )}
+
         <div className="divider" />
 
         <div className="section">
@@ -310,10 +352,10 @@ export default function PrintExit() {
           <span>R$ {totalVal.toFixed(2)}</span>
         </div>
 
-        {order.paymentMethod && (
+        {paymentMethod && (
           <div className="section center">
             <span className="label">Forma de Pagamento: </span>
-            <span className="bold">{order.paymentMethod}</span>
+            <span className="bold">{paymentMethod}</span>
           </div>
         )}
 
