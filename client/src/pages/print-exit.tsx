@@ -6,30 +6,28 @@ import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { type SystemSettings } from "@shared/schema";
-
-const FINAL_STATUS_LABELS: Record<string, string> = {
-  "ENTREGUE": "Consertado e entregue",
-  "NAO_AUTORIZADO": "Não autorizado (retirado)",
-  "DESCARTE_AUTORIZADO": "Autorizado para descarte",
-  "Consertado e entregue": "Consertado e entregue",
-  "Não autorizado (retirado)": "Não autorizado (retirado)",
-  "Autorizado para descarte": "Autorizado para descarte"
-};
+import { getOrderItemsSummary, isOrderItemFinalized } from "@/lib/service-order-items";
+import { useAppliances } from "@/hooks/use-appliances";
 
 export default function PrintExit() {
   const [, params] = useRoute("/print/exit/:id");
   const osId = Number(params?.id);
   const { data: order, isLoading: orderLoading } = useServiceOrder(osId);
+  const { data: appliances = [], isLoading: appliancesLoading } = useAppliances(order?.customerId || 0);
 
   const { data: settings, isLoading: settingsLoading } = useQuery<SystemSettings>({
     queryKey: ["/api/settings"],
   });
 
-  const isLoading = orderLoading || settingsLoading;
+  const isLoading = orderLoading || settingsLoading || appliancesLoading;
 
   const urlParams = new URLSearchParams(window.location.search);
   const size = urlParams.get("size") || "80";
   const width = size === "58" ? "48mm" : "72mm";
+  const selectedItemNumbers = (urlParams.get("items") || "")
+    .split(",")
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value) && value > 0);
 
   useEffect(() => {
     if (order && !isLoading) {
@@ -53,10 +51,26 @@ export default function PrintExit() {
     );
   }
 
-  const serviceVal = Number(order.serviceValue) || 0;
-  const partsVal = Number(order.partsValue) || 0;
-  const totalVal = Number(order.totalValue) || (serviceVal + partsVal);
-  const warrantyDays = order.warrantyDays || 90;
+  const itemSummaries = getOrderItemsSummary(order, appliances);
+  const printableItems = selectedItemNumbers.length
+    ? itemSummaries.filter((item) => selectedItemNumbers.includes(item.itemNumber))
+    : itemSummaries;
+  const displayedItems = printableItems.length ? printableItems : itemSummaries;
+  const serviceVal = displayedItems.reduce((sum, item) => sum + item.serviceValue, 0) || Number(order.serviceValue) || 0;
+  const partsVal = displayedItems.reduce((sum, item) => sum + item.partsValue, 0) || Number(order.partsValue) || 0;
+  const totalVal = displayedItems.reduce((sum, item) => sum + item.totalValue, 0) || Number(order.totalValue) || (serviceVal + partsVal);
+  const warrantyDays = displayedItems[0]?.warrantyDays || order.warrantyDays || 90;
+  const customerAddress = order.customer.address || "Não informado";
+  const exitDate = displayedItems
+    .map((item) => item.exitDate)
+    .filter(Boolean)
+    .map((value) => new Date(value!))
+    .sort((a, b) => b.getTime() - a.getTime())[0] ?? (order.exitDate ? new Date(order.exitDate) : new Date());
+  const finalizedBy = displayedItems
+    .map((item) => item.finalizedBy)
+    .filter(Boolean)
+    .at(-1) || order.finalizedBy;
+  const isPartialExit = displayedItems.length < itemSummaries.length || itemSummaries.some((item) => !isOrderItemFinalized(item));
 
   return (
     <>
@@ -173,11 +187,12 @@ export default function PrintExit() {
             <img src={settings.logoUrl} alt="Logo" style={{ maxHeight: "40px", marginBottom: "4px" }} />
           )}
           <div className="bold" style={{ fontSize: "13px" }}>{settings?.businessName || "TechRepair Assistência Técnica"}</div>
-          <div>WhatsApp: {settings?.phone || "(11) 99999-9999"}</div>
+          <div>{settings?.phone || "(11) 99999-9999"}</div>
+          {settings?.address && <div style={{ fontSize: "10px" }}>{settings.address}</div>}
         </div>
 
         <div className="title">
-          NOTA DE SAÍDA
+          {isPartialExit ? "NOTA DE SAÍDA PARCIAL" : "NOTA DE SAÍDA"}
         </div>
 
         <div className="os-number">
@@ -189,20 +204,60 @@ export default function PrintExit() {
         <div className="section">
           <div className="label">Cliente</div>
           <div className="bold">{order.customer.name}</div>
-          <div>Tel: {order.customer.phone}</div>
-          <div>End: {order.customer.address || "Nao informado"}</div>
+          <div><span className="label">Telefone</span> {order.customer.phone}</div>
+          <div><span className="label">Endereço</span> {customerAddress}</div>
         </div>
 
         <div className="divider" />
 
-        <div className="section">
-          <div className="label">Aparelho</div>
-          <div className="bold">{order.appliance.type} {order.appliance.brand}</div>
-          <div>Modelo: {order.appliance.model}</div>
-          {order.appliance.serialNumber && (
-            <div>Série: {order.appliance.serialNumber}</div>
-          )}
-        </div>
+        {displayedItems.map((item, index) => (
+          <div key={item.itemNumber}>
+            <div className="section">
+              <div className="label">Item {index + 1} - Aparelho</div>
+              <div className="bold">{item.applianceLabel}</div>
+              {item.appliance?.serialNumber && (
+                <div>Série: {item.appliance.serialNumber}</div>
+              )}
+            </div>
+
+            <div className="divider" />
+
+            <div className="section">
+              <div className="label">Defeito Relatado</div>
+              <div style={{ whiteSpace: "pre-wrap" }}>{item.defect}</div>
+            </div>
+
+            {item.observations && (
+              <>
+                <div className="divider" />
+                <div className="section">
+                  <div className="label">Observações</div>
+                  <div style={{ whiteSpace: "pre-wrap" }}>{item.observations}</div>
+                </div>
+              </>
+            )}
+
+            {item.diagnosis && (
+              <>
+                <div className="divider" />
+                <div className="section">
+                  <div className="label">Diagnóstico</div>
+                  <div style={{ whiteSpace: "pre-wrap" }}>{item.diagnosis}</div>
+                </div>
+              </>
+            )}
+
+            {item.partsDescription && (
+              <>
+                <div className="divider" />
+                <div className="section">
+                  <div className="label">Peças Utilizadas</div>
+                  <div style={{ whiteSpace: "pre-wrap" }}>{item.partsDescription}</div>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
 
         <div className="divider" />
 
@@ -213,33 +268,26 @@ export default function PrintExit() {
           </div>
           <div className="row">
             <span className="label">Saída:</span>
-            <span>{order.exitDate ? format(new Date(order.exitDate), "dd/MM/yyyy", { locale: ptBR }) : format(new Date(), "dd/MM/yyyy", { locale: ptBR })}</span>
+            <span>{format(exitDate, "dd/MM/yyyy", { locale: ptBR })}</span>
           </div>
         </div>
 
-        {order.finalizedBy && (
+        {order.createdBy && (
           <>
             <div className="divider" />
             <div className="section">
-              <div className="label">Responsável pela Saída</div>
-              <div className="bold">{order.finalizedBy}</div>
+              <div className="label">Responsável pela Entrada</div>
+              <div className="bold">{order.createdBy}</div>
             </div>
           </>
         )}
 
-        <div className="divider" />
-
-        <div className="section">
-          <div className="label">Serviço Realizado</div>
-          <div>{order.diagnosis || order.defect}</div>
-        </div>
-
-        {order.partsDescription && (
+        {finalizedBy && (
           <>
             <div className="divider" />
             <div className="section">
-              <div className="label">Peças Utilizadas</div>
-              <div style={{ whiteSpace: "pre-wrap" }}>{order.partsDescription}</div>
+              <div className="label">Responsável pela Saída</div>
+              <div className="bold">{finalizedBy}</div>
             </div>
           </>
         )}

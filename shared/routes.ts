@@ -1,5 +1,60 @@
 import { z } from 'zod';
-import { insertCustomerSchema, insertApplianceSchema, insertServiceOrderSchema, customers, appliances, serviceOrders } from './schema';
+import {
+  insertCustomerSchema,
+  insertApplianceSchema,
+  insertServiceOrderSchema,
+  customers,
+  appliances,
+  serviceOrders,
+  type ServiceOrderWithRelations,
+} from './schema';
+
+export const createServiceOrderItemInputSchema = z.object({
+  applianceId: z.number().int().positive(),
+  defect: z.string().trim().min(1),
+  observations: z.string().nullable().optional(),
+  diagnosis: z.string().nullable().optional(),
+  status: z.string().optional(),
+  serviceValue: z.string().optional(),
+  partsValue: z.string().optional(),
+  totalValue: z.string().optional(),
+  partsDescription: z.string().nullable().optional(),
+  warrantyDays: z.number().int().nullable().optional(),
+  exitDate: z.coerce.date().nullable().optional(),
+  finalStatus: z.string().nullable().optional(),
+  finalizedBy: z.string().nullable().optional(),
+  deliveredTo: z.string().nullable().optional(),
+  finalNotes: z.string().nullable().optional(),
+});
+
+export const createServiceOrderInputSchema = insertServiceOrderSchema.extend({
+  items: z.array(createServiceOrderItemInputSchema).min(1).max(10).optional(),
+});
+
+export type CreateServiceOrderInput = z.infer<typeof createServiceOrderInputSchema>;
+
+export const updateServiceOrderItemInputSchema = z.object({
+  id: z.number().int().positive().optional(),
+  itemNumber: z.number().int().positive().optional(),
+  diagnosis: z.string().nullable().optional(),
+  status: z.string().optional(),
+  serviceValue: z.string().optional(),
+  partsValue: z.string().optional(),
+  totalValue: z.string().optional(),
+  partsDescription: z.string().nullable().optional(),
+  warrantyDays: z.number().int().nullable().optional(),
+  exitDate: z.coerce.date().nullable().optional(),
+  finalStatus: z.string().nullable().optional(),
+  finalizedBy: z.string().nullable().optional(),
+  deliveredTo: z.string().nullable().optional(),
+  finalNotes: z.string().nullable().optional(),
+});
+
+export const updateServiceOrderInputSchema = insertServiceOrderSchema.partial().extend({
+  items: z.array(updateServiceOrderItemInputSchema).min(1).max(10).optional(),
+});
+
+export type UpdateServiceOrderInput = z.infer<typeof updateServiceOrderInputSchema>;
 
 export const errorSchemas = {
   validation: z.object({
@@ -110,14 +165,14 @@ export const api = {
       method: 'GET' as const,
       path: '/api/service-orders',
       responses: {
-        200: z.array(z.custom<typeof serviceOrders.$inferSelect & { customer: typeof customers.$inferSelect, appliance: typeof appliances.$inferSelect }>()),
+        200: z.array(z.custom<ServiceOrderWithRelations>()),
       },
     },
     get: {
       method: 'GET' as const,
       path: '/api/service-orders/:id',
       responses: {
-        200: z.custom<typeof serviceOrders.$inferSelect & { customer: typeof customers.$inferSelect, appliance: typeof appliances.$inferSelect }>(),
+        200: z.custom<ServiceOrderWithRelations>(),
         404: errorSchemas.notFound,
       },
     },
@@ -141,16 +196,16 @@ export const api = {
     create: {
       method: 'POST' as const,
       path: '/api/service-orders',
-      input: insertServiceOrderSchema,
+      input: createServiceOrderInputSchema,
       responses: {
-        201: z.custom<typeof serviceOrders.$inferSelect>(),
+        201: z.custom<ServiceOrderWithRelations>(),
         400: errorSchemas.validation,
       },
     },
     update: {
       method: 'PUT' as const,
       path: '/api/service-orders/:id',
-      input: insertServiceOrderSchema.partial(),
+      input: updateServiceOrderInputSchema,
       responses: {
         200: z.custom<typeof serviceOrders.$inferSelect>(),
         400: errorSchemas.validation,

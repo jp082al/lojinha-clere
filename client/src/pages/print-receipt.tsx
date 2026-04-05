@@ -6,17 +6,20 @@ import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { type SystemSettings } from "@shared/schema";
+import { getOrderItemsSummary } from "@/lib/service-order-items";
+import { useAppliances } from "@/hooks/use-appliances";
 
 export default function PrintReceipt() {
   const [, params] = useRoute("/print/receipt/:id");
   const osId = Number(params?.id);
   const { data: order, isLoading: orderLoading } = useServiceOrder(osId);
+  const { data: appliances = [], isLoading: appliancesLoading } = useAppliances(order?.customerId || 0);
 
   const { data: settings, isLoading: settingsLoading } = useQuery<SystemSettings>({
     queryKey: ["/api/settings"],
   });
 
-  const isLoading = orderLoading || settingsLoading;
+  const isLoading = orderLoading || settingsLoading || appliancesLoading;
 
   const urlParams = new URLSearchParams(window.location.search);
   const size = urlParams.get("size") || "80";
@@ -43,11 +46,8 @@ export default function PrintReceipt() {
       </div>
     );
   }
-
-  const trackingUrl = order.trackingToken 
-    ? `${window.location.origin}/acompanhamento/${order.trackingToken}`
-    : null;
-  const entryObservations = order.observations || order.diagnosis;
+  const customerAddress = order.customer.address || "Não informado";
+  const itemSummaries = getOrderItemsSummary(order, appliances);
 
   return (
     <>
@@ -102,14 +102,6 @@ export default function PrintReceipt() {
           font-size: 10px;
           text-transform: uppercase;
           color: #666;
-        }
-        .qr-container {
-          text-align: center;
-          margin: 12px 0;
-        }
-        .qr-container img {
-          width: 80px;
-          height: 80px;
         }
         .terms {
           font-size: 9px;
@@ -168,54 +160,51 @@ export default function PrintReceipt() {
         <div className="section">
           <div className="label">Cliente</div>
           <div className="bold">{order.customer.name}</div>
-          <div>Tel: {order.customer.phone}</div>
-          <div>End: {order.customer.address || "Nao informado"}</div>
+          <div><span className="label">Telefone</span> {order.customer.phone}</div>
+          <div><span className="label">Endereço</span> {customerAddress}</div>
         </div>
 
         <div className="divider" />
 
-        <div className="section">
-          <div className="label">Aparelho</div>
-          <div className="bold">{order.appliance.type} {order.appliance.brand}</div>
-          <div>Modelo: {order.appliance.model}</div>
-          {order.appliance.serialNumber && (
-            <div>Série: {order.appliance.serialNumber}</div>
-          )}
-        </div>
-
-        <div className="divider" />
-
-        <div className="section">
-          <div className="label">Defeito Relatado</div>
-          <div>{order.defect}</div>
-        </div>
-
-        {entryObservations && (
-          <>
+        {itemSummaries.map((item, index) => (
+          <div key={item.itemNumber}>
             <div className="divider" />
             <div className="section">
-              <div className="label">Observações</div>
-              <div style={{ whiteSpace: "pre-wrap" }}>{entryObservations}</div>
+              <div className="label">Item {index + 1} - Aparelho</div>
+              <div className="bold">{item.applianceLabel}</div>
+              {item.appliance?.serialNumber && (
+                <div>Série: {item.appliance.serialNumber}</div>
+              )}
             </div>
-          </>
-        )}
 
-        {trackingUrl && (
-          <>
             <div className="divider" />
-            <div className="qr-container">
-              <div className="label">Acompanhe sua OS online</div>
-              <img 
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(trackingUrl)}`} 
-                alt="QR Code"
-              />
-              <div style={{ fontSize: "8px", wordBreak: "break-all", marginTop: "4px" }}>
-                {trackingUrl}
-              </div>
-            </div>
-          </>
-        )}
 
+            <div className="section">
+              <div className="label">Defeito Relatado</div>
+              <div>{item.defect}</div>
+            </div>
+
+            {item.observations && (
+              <>
+                <div className="divider" />
+                <div className="section">
+                  <div className="label">Observações</div>
+                  <div style={{ whiteSpace: "pre-wrap" }}>{item.observations}</div>
+                </div>
+              </>
+            )}
+
+            {item.diagnosis && (
+              <>
+                <div className="divider" />
+                <div className="section">
+                  <div className="label">Diagnóstico</div>
+                  <div style={{ whiteSpace: "pre-wrap" }}>{item.diagnosis}</div>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
         <div className="divider" />
 
         <div className="terms center">

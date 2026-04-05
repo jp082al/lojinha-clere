@@ -3,6 +3,7 @@ import {
   customers,
   appliances,
   serviceOrders,
+  serviceOrderItems,
   serviceOrderPickupWarnings,
   payments,
   cashClosings,
@@ -13,6 +14,10 @@ import {
   type InsertAppliance,
   type ServiceOrder,
   type InsertServiceOrder,
+  type ServiceOrderItem,
+  type InsertServiceOrderItem,
+  type ServiceOrderItemView,
+  type ServiceOrderWithRelations,
   type ServiceOrderPickupWarning,
   type Payment,
   type InsertPayment,
@@ -21,8 +26,9 @@ import {
   type SystemSettings,
   type InsertSystemSettings
 } from "@shared/schema";
+import type { CreateServiceOrderInput, UpdateServiceOrderInput } from "@shared/routes";
 
-import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, inArray, asc } from "drizzle-orm";
 
 export interface IStorage {
 
@@ -34,9 +40,9 @@ export interface IStorage {
   getAppliancesByCustomerId(customerId: number): Promise<Appliance[]>;
   createAppliance(appliance: InsertAppliance): Promise<Appliance>;
 
-  getServiceOrders(): Promise<(ServiceOrder & { customer: Customer, appliance: Appliance })[]>;
-  getServiceOrder(id: number): Promise<(ServiceOrder & { customer: Customer, appliance: Appliance }) | undefined>;
-  getServiceOrderByToken(token: string): Promise<(ServiceOrder & { customer: Customer, appliance: Appliance }) | undefined>;
+  getServiceOrders(): Promise<ServiceOrderWithRelations[]>;
+  getServiceOrder(id: number): Promise<ServiceOrderWithRelations | undefined>;
+  getServiceOrderByToken(token: string): Promise<ServiceOrderWithRelations | undefined>;
   getPickupWarningOrders(): Promise<Array<{
     id: number;
     orderNumber: string | null;
@@ -79,8 +85,8 @@ export interface IStorage {
     }
   >;
 
-  createServiceOrder(order: InsertServiceOrder): Promise<ServiceOrder>;
-  updateServiceOrder(id: number, order: Partial<InsertServiceOrder>): Promise<ServiceOrder | undefined>;
+  createServiceOrder(order: CreateServiceOrderInput): Promise<ServiceOrder>;
+  updateServiceOrder(id: number, order: UpdateServiceOrderInput): Promise<ServiceOrder | undefined>;
 
   getPaymentsByDate(date: string): Promise<Payment[]>;
   getPaymentsByOrderId(orderId: number): Promise<Payment[]>;
@@ -102,6 +108,224 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  private normalizeMoneyValue(value: string | number | null | undefined): string {
+    const numericValue = Number(value ?? 0);
+
+    if (!Number.isFinite(numericValue)) {
+      return "0.00";
+    }
+
+    return numericValue.toFixed(2);
+  }
+
+  private isItemFinalized(item: Pick<ServiceOrderItem, "status" | "finalStatus">): boolean {
+    return Boolean(item.finalStatus) || item.status === "Entregue";
+  }
+
+  private getAggregateOrderStatus(items: Array<Pick<ServiceOrderItem, "status" | "finalStatus">>): string {
+    const openItems = items.filter((item) => !this.isItemFinalized(item));
+    const statuses = openItems.map((item) => item.status).filter(Boolean);
+
+    if (!openItems.length) {
+      return items.every((item) => item.finalStatus === "ENTREGUE") ? "Entregue" : "Pronto";
+    }
+
+    if (statuses.every((status) => status === "Pronto")) {
+      return "Pronto";
+    }
+
+    if (statuses.some((status) => status === "Em reparo")) {
+      return "Em reparo";
+    }
+
+    if (statuses.some((status) => status === "Aguardando peça")) {
+      return "Aguardando peça";
+    }
+
+    if (statuses.some((status) => status === "Em análise")) {
+      return "Em análise";
+    }
+
+    if (statuses.every((status) => status === "Recebido")) {
+      return "Recebido";
+    }
+
+    return "Em análise";
+  }
+
+  private getAggregateOrderFinalization(items: Array<Pick<ServiceOrderItem, "finalStatus" | "exitDate" | "deliveredTo" | "finalNotes" | "finalizedBy">>) {
+    if (!items.length || items.some((item) => !item.finalStatus)) {
+      return {
+        finalStatus: null,
+        exitDate: null,
+        deliveredTo: null,
+        finalNotes: null,
+        finalizedBy: null,
+      };
+    }
+
+    const finalStatuses = Array.from(new Set(items.map((item) => item.finalStatus).filter(Boolean)));
+    const deliveredToValues = Array.from(new Set(items.map((item) => item.deliveredTo).filter(Boolean)));
+    const finalNotesValues = Array.from(new Set(items.map((item) => item.finalNotes).filter(Boolean)));
+    const finalizedByValues = items
+      .map((item) => item.finalizedBy)
+      .filter((value): value is string => Boolean(value));
+    const exitDates = items
+      .map((item) => item.exitDate)
+      .filter((value): value is Date => value instanceof Date);
+
+    return {
+      finalStatus: finalStatuses.length === 1 ? finalStatuses[0] : null,
+      exitDate: exitDates.length ? new Date(Math.max(...exitDates.map((date) => date.getTime()))) : null,
+      deliveredTo: deliveredToValues.length === 1 ? deliveredToValues[0] : null,
+      finalNotes: finalNotesValues.length === 1 ? finalNotesValues[0] : null,
+      finalizedBy: finalizedByValues[finalizedByValues.length - 1] ?? null,
+    };
+  }
+
+  private getAggregatePartsDescription(items: Array<Pick<ServiceOrderItem, "itemNumber" | "partsDescription">>): string | null {
+    const describedItems = items
+      .filter((item) => item.partsDescription?.trim())
+      .map((item) => `Item ${item.itemNumber}: ${item.partsDescription!.trim()}`);
+
+    if (!describedItems.length) {
+      return null;
+    }
+
+    if (describedItems.length === 1) {
+      return describedItems[0].replace(/^Item \d+: /, "");
+    }
+
+    return describedItems.join("\n");
+  }
+
+  private normalizeCreateOrderItems(order: CreateServiceOrderInput): Array<Omit<InsertServiceOrderItem, "serviceOrderId" | "itemNumber" | "createdAt" | "updatedAt">> {
+    if (order.items?.length) {
+      return order.items.map((item) => ({
+        applianceId: item.applianceId,
+        defect: item.defect,
+        observations: item.observations ?? null,
+        diagnosis: item.diagnosis ?? null,
+        status: item.status ?? "Recebido",
+        serviceValue: item.serviceValue ?? "0",
+        partsValue: item.partsValue ?? "0",
+        totalValue: item.totalValue ?? "0",
+        partsDescription: item.partsDescription ?? null,
+        warrantyDays: item.warrantyDays ?? 90,
+        exitDate: item.exitDate ?? null,
+        finalStatus: item.finalStatus ?? null,
+        finalizedBy: item.finalizedBy ?? null,
+        deliveredTo: item.deliveredTo ?? null,
+        finalNotes: item.finalNotes ?? null,
+      }));
+    }
+
+    return [{
+      applianceId: order.applianceId,
+      defect: order.defect,
+      observations: order.observations ?? null,
+      diagnosis: order.diagnosis ?? null,
+      status: order.status,
+      serviceValue: order.serviceValue ?? "0",
+      partsValue: order.partsValue ?? "0",
+      totalValue: order.totalValue ?? "0",
+      partsDescription: order.partsDescription ?? null,
+      warrantyDays: order.warrantyDays ?? 90,
+      exitDate: order.exitDate ?? null,
+      finalStatus: order.finalStatus ?? null,
+      finalizedBy: order.finalizedBy ?? null,
+      deliveredTo: order.deliveredTo ?? null,
+      finalNotes: order.finalNotes ?? null,
+    }];
+  }
+
+  private getUpdatedValue<T extends object, K extends keyof T>(data: Partial<T>, key: K, fallback: T[K]): T[K] {
+    return key in data ? data[key] as T[K] : fallback;
+  }
+
+  private toPrimaryItemPayload(order: Pick<
+    InsertServiceOrder,
+    | "applianceId"
+    | "defect"
+    | "observations"
+    | "diagnosis"
+    | "status"
+    | "serviceValue"
+    | "partsValue"
+    | "totalValue"
+    | "partsDescription"
+    | "warrantyDays"
+    | "exitDate"
+    | "finalStatus"
+    | "finalizedBy"
+    | "deliveredTo"
+    | "finalNotes"
+  >): Omit<InsertServiceOrderItem, "serviceOrderId" | "itemNumber"> {
+    return {
+      applianceId: order.applianceId,
+      defect: order.defect,
+      observations: order.observations,
+      diagnosis: order.diagnosis,
+      status: order.status,
+      serviceValue: order.serviceValue,
+      partsValue: order.partsValue,
+      totalValue: order.totalValue,
+      partsDescription: order.partsDescription,
+      warrantyDays: order.warrantyDays,
+      exitDate: order.exitDate,
+      finalStatus: order.finalStatus,
+      finalizedBy: order.finalizedBy,
+      deliveredTo: order.deliveredTo,
+      finalNotes: order.finalNotes,
+    };
+  }
+
+  private buildLegacyCompatibleItem(order: ServiceOrder): ServiceOrderItemView {
+    return {
+      id: null,
+      serviceOrderId: order.id,
+      applianceId: order.applianceId,
+      itemNumber: 1,
+      defect: order.defect,
+      observations: order.observations,
+      diagnosis: order.diagnosis,
+      status: order.status,
+      serviceValue: order.serviceValue,
+      partsValue: order.partsValue,
+      totalValue: order.totalValue,
+      partsDescription: order.partsDescription,
+      warrantyDays: order.warrantyDays,
+      exitDate: order.exitDate,
+      finalStatus: order.finalStatus,
+      finalizedBy: order.finalizedBy,
+      deliveredTo: order.deliveredTo,
+      finalNotes: order.finalNotes,
+      createdAt: order.entryDate,
+      updatedAt: order.entryDate,
+    };
+  }
+
+  private async getItemsByServiceOrderIds(serviceOrderIds: number[]): Promise<Map<number, ServiceOrderItemView[]>> {
+    if (!serviceOrderIds.length) {
+      return new Map();
+    }
+
+    const items = await db
+      .select()
+      .from(serviceOrderItems)
+      .where(inArray(serviceOrderItems.serviceOrderId, serviceOrderIds))
+      .orderBy(asc(serviceOrderItems.serviceOrderId), asc(serviceOrderItems.itemNumber), asc(serviceOrderItems.id));
+
+    const itemsByOrderId = new Map<number, ServiceOrderItemView[]>();
+
+    for (const item of items) {
+      const orderItems = itemsByOrderId.get(item.serviceOrderId) ?? [];
+      orderItems.push(item);
+      itemsByOrderId.set(item.serviceOrderId, orderItems);
+    }
+
+    return itemsByOrderId;
+  }
 
   // CUSTOMERS
 
@@ -149,7 +373,7 @@ export class DatabaseStorage implements IStorage {
 
   // SERVICE ORDERS
 
-  async getServiceOrders() {
+  async getServiceOrders(): Promise<ServiceOrderWithRelations[]> {
     const rows = await db
       .select({
         serviceOrder: serviceOrders,
@@ -161,14 +385,17 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(appliances, eq(serviceOrders.applianceId, appliances.id))
       .orderBy(desc(serviceOrders.entryDate));
 
+    const itemsByOrderId = await this.getItemsByServiceOrderIds(rows.map((row) => row.serviceOrder.id));
+
     return rows.map((row) => ({
       ...row.serviceOrder,
       customer: row.customer,
       appliance: row.appliance,
+      items: itemsByOrderId.get(row.serviceOrder.id) ?? [this.buildLegacyCompatibleItem(row.serviceOrder)],
     }));
   }
 
-  async getServiceOrder(id: number) {
+  async getServiceOrder(id: number): Promise<ServiceOrderWithRelations | undefined> {
 
     const rows = await db
       .select({
@@ -184,15 +411,17 @@ export class DatabaseStorage implements IStorage {
     if (!rows.length) return undefined;
 
     const row = rows[0];
+    const itemsByOrderId = await this.getItemsByServiceOrderIds([row.serviceOrder.id]);
 
     return {
       ...row.serviceOrder,
       customer: row.customer,
       appliance: row.appliance,
+      items: itemsByOrderId.get(row.serviceOrder.id) ?? [this.buildLegacyCompatibleItem(row.serviceOrder)],
     };
   }
 
-  async getServiceOrderByToken(token: string) {
+  async getServiceOrderByToken(token: string): Promise<ServiceOrderWithRelations | undefined> {
 
     const rows = await db
       .select({
@@ -208,11 +437,13 @@ export class DatabaseStorage implements IStorage {
     if (!rows.length) return undefined;
 
     const row = rows[0];
+    const itemsByOrderId = await this.getItemsByServiceOrderIds([row.serviceOrder.id]);
 
     return {
       ...row.serviceOrder,
       customer: row.customer,
       appliance: row.appliance,
+      items: itemsByOrderId.get(row.serviceOrder.id) ?? [this.buildLegacyCompatibleItem(row.serviceOrder)],
     };
   }
 
@@ -396,33 +627,182 @@ export class DatabaseStorage implements IStorage {
     return `OS-${year}-${next}`;
   }
 
-  async createServiceOrder(insertOrder: InsertServiceOrder): Promise<ServiceOrder> {
-
+  async createServiceOrder(insertOrder: CreateServiceOrderInput): Promise<ServiceOrder> {
     const trackingToken = this.generateTrackingToken();
-
     const orderNumber = await this.getNextOrderNumber();
+    const normalizedItems = this.normalizeCreateOrderItems(insertOrder);
+    const primaryItem = normalizedItems[0];
+    const { items: _ignoredItems, ...serviceOrderData } = insertOrder;
 
-    const [order] = await db
-      .insert(serviceOrders)
-      .values({
-        ...insertOrder,
-        orderNumber,
-        trackingToken,
-      })
-      .returning();
+    return await db.transaction(async (tx) => {
+      const [order] = await tx
+        .insert(serviceOrders)
+        .values({
+          ...serviceOrderData,
+          applianceId: primaryItem.applianceId,
+          defect: primaryItem.defect,
+          observations: primaryItem.observations,
+          diagnosis: primaryItem.diagnosis,
+          status: primaryItem.status,
+          serviceValue: primaryItem.serviceValue,
+          partsValue: primaryItem.partsValue,
+          totalValue: primaryItem.totalValue,
+          partsDescription: primaryItem.partsDescription,
+          warrantyDays: primaryItem.warrantyDays,
+          exitDate: primaryItem.exitDate,
+          finalStatus: primaryItem.finalStatus,
+          finalizedBy: primaryItem.finalizedBy,
+          deliveredTo: primaryItem.deliveredTo,
+          finalNotes: primaryItem.finalNotes,
+          orderNumber,
+          trackingToken,
+        })
+        .returning();
 
-    return order;
+      await tx.insert(serviceOrderItems).values(
+        normalizedItems.map((item, index) => ({
+          serviceOrderId: order.id,
+          itemNumber: index + 1,
+          ...item,
+        }))
+      );
+
+      return order;
+    });
   }
 
-  async updateServiceOrder(id: number, updateData: Partial<InsertServiceOrder>) {
+  async updateServiceOrder(id: number, updateData: UpdateServiceOrderInput) {
+    return await db.transaction(async (tx) => {
+      const { items: itemUpdates, ...serviceOrderUpdateData } = updateData;
+      const hasServiceOrderUpdates = Object.keys(serviceOrderUpdateData).length > 0;
+      const [order] = hasServiceOrderUpdates
+        ? await tx
+          .update(serviceOrders)
+          .set(serviceOrderUpdateData)
+          .where(eq(serviceOrders.id, id))
+          .returning()
+        : await tx
+          .select()
+          .from(serviceOrders)
+          .where(eq(serviceOrders.id, id))
+          .limit(1);
 
-    const [order] = await db
-      .update(serviceOrders)
-      .set(updateData)
-      .where(eq(serviceOrders.id, id))
-      .returning();
+      if (!order) {
+        return undefined;
+      }
 
-    return order;
+      const [primaryItem] = await tx
+        .select()
+        .from(serviceOrderItems)
+        .where(eq(serviceOrderItems.serviceOrderId, id))
+        .orderBy(asc(serviceOrderItems.itemNumber), asc(serviceOrderItems.id))
+        .limit(1);
+
+      if (primaryItem) {
+        const itemUpdateData = this.toPrimaryItemPayload({
+          applianceId: this.getUpdatedValue(serviceOrderUpdateData, "applianceId", primaryItem.applianceId),
+          defect: this.getUpdatedValue(serviceOrderUpdateData, "defect", primaryItem.defect),
+          observations: this.getUpdatedValue(serviceOrderUpdateData, "observations", primaryItem.observations),
+          diagnosis: this.getUpdatedValue(serviceOrderUpdateData, "diagnosis", primaryItem.diagnosis),
+          status: this.getUpdatedValue(serviceOrderUpdateData, "status", primaryItem.status),
+          serviceValue: this.getUpdatedValue(serviceOrderUpdateData, "serviceValue", primaryItem.serviceValue),
+          partsValue: this.getUpdatedValue(serviceOrderUpdateData, "partsValue", primaryItem.partsValue),
+          totalValue: this.getUpdatedValue(serviceOrderUpdateData, "totalValue", primaryItem.totalValue),
+          partsDescription: this.getUpdatedValue(serviceOrderUpdateData, "partsDescription", primaryItem.partsDescription),
+          warrantyDays: this.getUpdatedValue(serviceOrderUpdateData, "warrantyDays", primaryItem.warrantyDays),
+          exitDate: this.getUpdatedValue(serviceOrderUpdateData, "exitDate", primaryItem.exitDate),
+          finalStatus: this.getUpdatedValue(serviceOrderUpdateData, "finalStatus", primaryItem.finalStatus),
+          finalizedBy: this.getUpdatedValue(serviceOrderUpdateData, "finalizedBy", primaryItem.finalizedBy),
+          deliveredTo: this.getUpdatedValue(serviceOrderUpdateData, "deliveredTo", primaryItem.deliveredTo),
+          finalNotes: this.getUpdatedValue(serviceOrderUpdateData, "finalNotes", primaryItem.finalNotes),
+        });
+
+        await tx
+          .update(serviceOrderItems)
+          .set(itemUpdateData)
+          .where(eq(serviceOrderItems.id, primaryItem.id));
+      }
+
+      if (itemUpdates?.length) {
+        for (const itemUpdate of itemUpdates) {
+          let item: ServiceOrderItem | undefined;
+
+          if (itemUpdate.id) {
+            const [foundItem] = await tx
+              .select()
+              .from(serviceOrderItems)
+              .where(eq(serviceOrderItems.id, itemUpdate.id))
+              .limit(1);
+            item = foundItem;
+          } else if (itemUpdate.itemNumber) {
+            const [foundItem] = await tx
+              .select()
+              .from(serviceOrderItems)
+              .where(and(
+                eq(serviceOrderItems.serviceOrderId, id),
+                eq(serviceOrderItems.itemNumber, itemUpdate.itemNumber),
+              ))
+              .limit(1);
+            item = foundItem;
+          }
+
+          if (item) {
+            const serviceValue = this.normalizeMoneyValue(itemUpdate.serviceValue ?? item.serviceValue);
+            const partsValue = this.normalizeMoneyValue(itemUpdate.partsValue ?? item.partsValue);
+            const totalValue = this.normalizeMoneyValue(Number(serviceValue) + Number(partsValue));
+
+            await tx
+              .update(serviceOrderItems)
+              .set({
+                diagnosis: itemUpdate.diagnosis ?? item.diagnosis ?? null,
+                status: itemUpdate.status ?? item.status,
+                serviceValue,
+                partsValue,
+                totalValue,
+                partsDescription: itemUpdate.partsDescription ?? item.partsDescription ?? null,
+                warrantyDays: itemUpdate.warrantyDays ?? item.warrantyDays,
+                exitDate: itemUpdate.exitDate ?? item.exitDate ?? null,
+                finalStatus: itemUpdate.finalStatus ?? item.finalStatus ?? null,
+                finalizedBy: itemUpdate.finalizedBy ?? item.finalizedBy ?? null,
+                deliveredTo: itemUpdate.deliveredTo ?? item.deliveredTo ?? null,
+                finalNotes: itemUpdate.finalNotes ?? item.finalNotes ?? null,
+              })
+              .where(eq(serviceOrderItems.id, item.id));
+          }
+        }
+
+        const updatedItems = await tx
+          .select()
+          .from(serviceOrderItems)
+          .where(eq(serviceOrderItems.serviceOrderId, id))
+          .orderBy(asc(serviceOrderItems.itemNumber), asc(serviceOrderItems.id));
+
+        const updatedPrimaryItem = updatedItems[0];
+        const aggregateFinalization = this.getAggregateOrderFinalization(updatedItems);
+
+        if (updatedPrimaryItem) {
+          await tx
+            .update(serviceOrders)
+            .set({
+              diagnosis: updatedPrimaryItem.diagnosis,
+              status: this.getAggregateOrderStatus(updatedItems),
+              serviceValue: this.normalizeMoneyValue(updatedItems.reduce((sum, item) => sum + Number(item.serviceValue ?? 0), 0)),
+              partsValue: this.normalizeMoneyValue(updatedItems.reduce((sum, item) => sum + Number(item.partsValue ?? 0), 0)),
+              totalValue: this.normalizeMoneyValue(updatedItems.reduce((sum, item) => sum + Number(item.totalValue ?? 0), 0)),
+              partsDescription: this.getAggregatePartsDescription(updatedItems),
+              warrantyDays: updatedPrimaryItem.warrantyDays,
+              exitDate: aggregateFinalization.exitDate,
+              finalStatus: aggregateFinalization.finalStatus,
+              deliveredTo: aggregateFinalization.deliveredTo,
+              finalNotes: aggregateFinalization.finalNotes,
+              finalizedBy: aggregateFinalization.finalizedBy,
+            })
+            .where(eq(serviceOrders.id, id));
+        }
+      }
+
+      return order;
+    });
   }
 
   // PAYMENTS

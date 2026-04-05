@@ -3,23 +3,26 @@ import { useServiceOrder } from "@/hooks/use-service-orders";
 import { format } from "date-fns";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
+import { getOrderItemsSummary } from "@/lib/service-order-items";
+import { useAppliances } from "@/hooks/use-appliances";
 
 export default function PrintLabel() {
   const [, params] = useRoute("/print/label/:id");
   const osId = Number(params?.id);
   const { data: order, isLoading } = useServiceOrder(osId);
+  const { data: appliances = [], isLoading: appliancesLoading } = useAppliances(order?.customerId || 0);
 
   const urlParams = new URLSearchParams(window.location.search);
   const size = urlParams.get("size") || "80";
   const width = size === "58" ? "48mm" : "72mm";
 
   useEffect(() => {
-    if (order && !isLoading) {
+    if (order && !isLoading && !appliancesLoading) {
       setTimeout(() => window.print(), 500);
     }
-  }, [order, isLoading]);
+  }, [order, isLoading, appliancesLoading]);
 
-  if (isLoading) {
+  if (isLoading || appliancesLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -34,12 +37,8 @@ export default function PrintLabel() {
       </div>
     );
   }
-
-  const trackingUrl = order.trackingToken 
-    ? `${window.location.origin}/acompanhamento/${order.trackingToken}`
-    : null;
-
   const shortName = order.customer.name.split(' ').slice(0, 2).join(' ');
+  const itemSummaries = getOrderItemsSummary(order, appliances);
 
   return (
     <>
@@ -64,7 +63,7 @@ export default function PrintLabel() {
           background: white;
           color: black;
         }
-        .label {
+        .print-label {
           width: ${width};
           padding: 3mm;
           margin: 0 auto;
@@ -78,24 +77,27 @@ export default function PrintLabel() {
           margin-bottom: 6px;
         }
         .customer-name {
-          font-size: 14px;
+          font-size: 13px;
           font-weight: bold;
           margin: 4px 0;
         }
         .appliance-info {
-          font-size: 11px;
+          font-size: 10px;
           margin: 4px 0;
+          text-align: left;
+        }
+        .appliance-line {
+          margin-bottom: 2px;
+          white-space: pre-wrap;
+        }
+        .label {
+          font-size: 9px;
+          text-transform: uppercase;
+          color: #666;
         }
         .date {
           font-size: 10px;
           color: #666;
-        }
-        .qr-container {
-          margin-top: 8px;
-        }
-        .qr-container img {
-          width: 60px;
-          height: 60px;
         }
       `}</style>
 
@@ -114,33 +116,28 @@ export default function PrintLabel() {
         </button>
       </div>
 
-      <div className="label">
+      <div className="print-label">
         <div className="os-number">
           {order.orderNumber}
         </div>
 
         <div className="customer-name">
+          <div className="label">Cliente</div>
           {shortName}
         </div>
 
         <div className="appliance-info">
-          {order.appliance.type} {order.appliance.brand}
-          <br />
-          {order.appliance.model}
+          <div className="label">{itemSummaries.length > 1 ? "Aparelhos" : "Aparelho"}</div>
+          {itemSummaries.map((item) => (
+            <div key={item.itemNumber} className="appliance-line">
+              {item.applianceLabel}
+            </div>
+          ))}
         </div>
 
         <div className="date">
           {order.entryDate && format(new Date(order.entryDate), "dd/MM/yyyy")}
         </div>
-
-        {trackingUrl && (
-          <div className="qr-container">
-            <img 
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=${encodeURIComponent(trackingUrl)}`} 
-              alt="QR"
-            />
-          </div>
-        )}
       </div>
     </>
   );

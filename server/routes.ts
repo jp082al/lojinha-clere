@@ -132,11 +132,12 @@ export async function registerRoutes(
   app.post(api.serviceOrders.create.path, isAuthenticated, async (req, res) => {
     try {
       const input = api.serviceOrders.create.input.parse(req.body);
-      const order = await storage.createServiceOrder({
+      const createdOrder = await storage.createServiceOrder({
         ...input,
         createdBy: req.user!.username,
       });
-      res.status(201).json(order);
+      const order = await storage.getServiceOrder(createdOrder.id);
+      res.status(201).json(order ?? createdOrder);
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
+import type { CreateServiceOrderInput, UpdateServiceOrderInput } from "@shared/routes";
 import type { InsertServiceOrder, ServiceOrder } from "@shared/schema";
 
 export function useServiceOrders() {
@@ -30,7 +31,7 @@ export function useServiceOrder(id: number) {
 export function useCreateServiceOrder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: InsertServiceOrder) => {
+    mutationFn: async (data: CreateServiceOrderInput) => {
       const res = await fetch(api.serviceOrders.create.path, {
         method: api.serviceOrders.create.method,
         headers: { "Content-Type": "application/json" },
@@ -47,11 +48,15 @@ export function useCreateServiceOrder() {
 export function useUpdateServiceOrder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...data }: { id: number } & Partial<InsertServiceOrder> & { exitDate?: Date | string | null, finalizedBy?: string | null }) => {
+    mutationFn: async ({ id, ...data }: { id: number } & UpdateServiceOrderInput & { exitDate?: Date | string | null, finalizedBy?: string | null }) => {
       const url = buildUrl(api.serviceOrders.update.path, { id });
       const payload = {
         ...data,
         exitDate: data.exitDate instanceof Date ? data.exitDate.toISOString() : data.exitDate,
+        items: data.items?.map((item) => ({
+          ...item,
+          exitDate: item.exitDate instanceof Date ? item.exitDate.toISOString() : item.exitDate,
+        })),
       };
       const res = await fetch(url, {
         method: api.serviceOrders.update.method,

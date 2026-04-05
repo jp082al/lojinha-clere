@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -63,6 +64,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { apiRequest } from "@/lib/queryClient";
+import { getOrderItemsSummary, getOrderSummaryPreview, isOrderItemFinalized } from "@/lib/service-order-items";
 
 type OrderTab = "all" | "not_evaluated" | "awaiting_approval" | "authorized" | "not_authorized" | "ready" | "finalized";
 
@@ -126,6 +128,7 @@ export default function Orders() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any | null>(null);
   const [finalizingOrder, setFinalizingOrder] = useState<any | null>(null);
+  const { data: appliances = [] } = useAppliances(editingOrder?.customerId || 0);
 
   const filteredOrders = orders.filter((order) => {
     const matchesTab = activeTab === "all" || getOrderTab(order) === activeTab;
@@ -139,7 +142,14 @@ export default function Orders() {
       (order.orderNumber || "").toLowerCase().includes(search) ||
       (order.customer.name || "").toLowerCase().includes(search) ||
       (order.customer.phone || "").toLowerCase().includes(search) ||
-      (order.appliance.model || "").toLowerCase().includes(search) ||
+      getOrderItemsSummary(order, appliances).some((item) =>
+        [
+          item.appliance?.type,
+          item.appliance?.brand,
+          item.appliance?.model,
+          item.defect,
+        ].some((value) => (value || "").toLowerCase().includes(search))
+      ) ||
       (order.orderNumber || "").toLowerCase().includes(`os-${search}`)
     );
   });
@@ -199,6 +209,7 @@ export default function Orders() {
             </div>
           ) : (
             filteredOrders?.map((order) => {
+              const orderSummary = getOrderSummaryPreview(order, appliances);
               return (
               <Card 
                 key={order.id} 
@@ -224,15 +235,20 @@ export default function Orders() {
                       </div>
                       <h3 className="text-lg font-semibold sm:text-xl">{order.customer.name}</h3>
                       <p className="break-words text-sm text-muted-foreground sm:text-base">
-                        {order.appliance.type} {order.appliance.brand} - {order.defect}
+                        {orderSummary.preview}
                       </p>
+                      {orderSummary.itemCount > 1 && (
+                        <p className="text-xs text-muted-foreground">
+                          {orderSummary.itemCount} aparelhos nesta OS
+                        </p>
+                      )}
                     </div>
                     
                     <div className="flex flex-col gap-3 border-t pt-3 md:items-end md:border-t-0 md:pt-0">
                       <div className="text-left md:text-right">
                         <p className="text-sm text-muted-foreground">Total Estimado</p>
                         <p className="text-xl font-bold text-primary sm:text-2xl">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(order.totalValue))}
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(orderSummary.totalValue)}
                         </p>
                       </div>
                       
@@ -312,6 +328,7 @@ export default function Orders() {
           {editingOrder && (
             <OrderDetails 
               order={editingOrder} 
+              appliances={appliances}
               onClose={() => setEditingOrder(null)}
               onFinalize={() => {
                 setFinalizingOrder(editingOrder);
@@ -337,19 +354,42 @@ export default function Orders() {
   );
 }
 
-function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () => void, onFinalize: () => void }) {
+function OrderDetails({ order, appliances, onClose, onFinalize }: { order: any, appliances: any[], onClose: () => void, onFinalize: () => void }) {
   const { mutate: update, isPending } = useUpdateServiceOrder();
   const { toast } = useToast();
   const { hasPermission, user } = useAuth();
   const [budgetOpen, setBudgetOpen] = useState(true);
+  const itemSummaries = getOrderItemsSummary(order, appliances);
+  const primaryItem = itemSummaries[0];
+  const openItems = itemSummaries.filter((item) => !isOrderItemFinalized(item));
+  const canTriggerDelivery = openItems.length > 0;
+  const [itemDiagnoses, setItemDiagnoses] = useState<Record<number, string>>(
+    Object.fromEntries(itemSummaries.map((item) => [item.itemNumber, item.diagnosis || ""]))
+  );
+  const [itemTechnicals, setItemTechnicals] = useState<Record<number, {
+    status: string;
+    serviceValue: string;
+    partsValue: string;
+    partsDescription: string;
+  }>>(
+    Object.fromEntries(itemSummaries.map((item) => [
+      item.itemNumber,
+      {
+        status: item.status || order.status || "Recebido",
+        serviceValue: item.serviceValue.toString(),
+        partsValue: item.partsValue.toString(),
+        partsDescription: item.partsDescription || "",
+      },
+    ]))
+  );
   
   const form = useForm<InsertServiceOrder>({
     resolver: zodResolver(insertServiceOrderSchema),
     defaultValues: {
       customerId: order.customerId,
       applianceId: order.applianceId,
-      defect: order.defect,
-      diagnosis: order.diagnosis || "",
+      defect: primaryItem?.defect || order.defect,
+      diagnosis: primaryItem?.diagnosis || order.diagnosis || "",
       status: order.status,
       serviceValue: order.serviceValue,
       partsValue: order.partsValue,
@@ -358,8 +398,32 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
   });
 
   const onSubmit = (data: InsertServiceOrder) => {
-    const total = (Number(data.serviceValue) + Number(data.partsValue)).toString();
-    const finalData = { ...data, totalValue: total };
+    const primaryItemState = itemTechnicals[primaryItem?.itemNumber || 1];
+    const total = (Number(primaryItemState?.serviceValue || 0) + Number(primaryItemState?.partsValue || 0)).toString();
+    const finalData = {
+      ...data,
+      status: primaryItemState?.status || order.status,
+      serviceValue: primaryItemState?.serviceValue || "0",
+      partsValue: primaryItemState?.partsValue || "0",
+      partsDescription: primaryItemState?.partsDescription || null,
+      diagnosis: itemDiagnoses[primaryItem?.itemNumber || 1] || null,
+      totalValue: total,
+      items: itemSummaries
+        .filter((item) => item.id)
+        .map((item) => ({
+          id: item.id || undefined,
+          itemNumber: item.itemNumber,
+          diagnosis: itemDiagnoses[item.itemNumber] || null,
+          status: itemTechnicals[item.itemNumber]?.status || item.status || "Recebido",
+          serviceValue: itemTechnicals[item.itemNumber]?.serviceValue || "0",
+          partsValue: itemTechnicals[item.itemNumber]?.partsValue || "0",
+          totalValue: (
+            Number(itemTechnicals[item.itemNumber]?.serviceValue || 0) +
+            Number(itemTechnicals[item.itemNumber]?.partsValue || 0)
+          ).toString(),
+          partsDescription: itemTechnicals[item.itemNumber]?.partsDescription || null,
+        })),
+    };
     update({ id: order.id, ...finalData }, { 
       onSuccess: () => {
         toast({ title: "OS atualizada com sucesso!" });
@@ -372,7 +436,7 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
     ? `${window.location.origin}/acompanhamento/${order.trackingToken}`
     : null;
 
-  const isFinalized = order.finalStatus || order.status === "Entregue";
+  const isFinalized = !canTriggerDelivery && (Boolean(order.finalStatus) || order.status === "Entregue");
 
   return (
     <>
@@ -404,6 +468,17 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
         >
           <Tag className="w-4 h-4 mr-2" /> Etiqueta
         </Button>
+        {canTriggerDelivery && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="min-h-10 justify-start border-orange-200 text-orange-600 hover:bg-orange-50"
+            onClick={onFinalize}
+          >
+            <CheckCircle2 className="w-4 h-4 mr-2" />
+            {itemSummaries.length > 1 ? "Entregar Itens" : "Entregar OS"}
+          </Button>
+        )}
         {isFinalized && (
           <Button 
             size="sm" 
@@ -430,8 +505,8 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
           variant="outline"
           className="min-h-10 justify-start"
           onClick={() => {
-            const subject = `OS #${order.id} - ${order.appliance.type} ${order.appliance.brand}`;
-            const body = `Olá ${order.customer.name},\n\nSua OS ${order.orderNumber} está com status: ${order.status}\n\nAparelho: ${order.appliance.type} ${order.appliance.brand} ${order.appliance.model}\nDefeito: ${order.defect}\n\n${trackingUrl ? `Acompanhe online: ${trackingUrl}` : ''}\n\nAtenciosamente,\nTechRepair`;
+            const subject = `OS #${order.id} - ${primaryItem?.applianceLabel || "Aparelhos"}`;
+            const body = `Olá ${order.customer.name},\n\nSua OS ${order.orderNumber} está com status: ${order.status}\n\n${itemSummaries.map((item) => `Item ${item.itemNumber}: ${item.applianceLabel}\nDefeito: ${item.defect}`).join("\n\n")}\n\n${trackingUrl ? `Acompanhe online: ${trackingUrl}` : ''}\n\nAtenciosamente,\nTechRepair`;
             window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
           }}
         >
@@ -450,9 +525,15 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
           <p className="text-muted-foreground">{order.customer.address || "Não informado"}</p>
         </div>
         <div>
-          <p className="text-muted-foreground">Aparelho</p>
-          <p className="font-medium">{order.appliance.type} {order.appliance.brand}</p>
-          <p className="text-muted-foreground">{order.appliance.model}</p>
+          <p className="text-muted-foreground">Itens da OS</p>
+          <div className="space-y-2">
+            {itemSummaries.map((item) => (
+              <div key={item.itemNumber}>
+                <p className="font-medium">Item {item.itemNumber}: {item.applianceLabel}</p>
+                <p className="text-muted-foreground">{item.defect}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -473,78 +554,139 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
             )}
           />
 
-          <FormField
-            control={form.control}
-            name="diagnosis"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Diagnóstico Técnico</FormLabel>
-                <FormControl>
-                  <Textarea placeholder="Diagnóstico do técnico..." {...field} value={field.value || ""} disabled={isFinalized} />
-                </FormControl>
-              </FormItem>
-            )}
-          />
+          <div className="space-y-4">
+            <FormLabel>Bloco Técnico/Comercial por Item</FormLabel>
+            {itemSummaries.map((item) => (
+              <div key={item.itemNumber} className="space-y-3 rounded-lg border p-4">
+                <div>
+                  <p className="font-medium">{item.applianceLabel}</p>
+                  <p className="text-sm text-muted-foreground">{item.defect}</p>
+                </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Status</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value} disabled={isFinalized}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="Recebido">Recebido</SelectItem>
-                      <SelectItem value="Em análise">Em análise</SelectItem>
-                      <SelectItem value="Aguardando peça">Aguardando peça</SelectItem>
-                      <SelectItem value="Em reparo">Em reparo</SelectItem>
-                      <SelectItem value="Pronto">Pronto</SelectItem>
-                      <SelectItem value="Entregue">Entregue</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <FormLabel className="text-sm text-muted-foreground">Diagnóstico Técnico</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Diagnóstico do técnico..."
+                      value={itemDiagnoses[item.itemNumber] || ""}
+                      onChange={(e) => setItemDiagnoses((current) => ({
+                        ...current,
+                        [item.itemNumber]: e.target.value,
+                      }))}
+                      disabled={isFinalized}
+                    />
+                  </FormControl>
                 </FormItem>
-              )}
-            />
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="serviceValue"
-                render={({ field }) => (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <FormItem>
-                    <FormLabel>Mão de Obra</FormLabel>
+                    <FormLabel className="text-sm text-muted-foreground">Status do Item</FormLabel>
+                    <Select
+                      value={itemTechnicals[item.itemNumber]?.status || "Recebido"}
+                      onValueChange={(value) => setItemTechnicals((current) => ({
+                        ...current,
+                        [item.itemNumber]: {
+                          ...current[item.itemNumber],
+                          status: value,
+                        },
+                      }))}
+                      disabled={isFinalized}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="Recebido">Recebido</SelectItem>
+                        <SelectItem value="Em análise">Em análise</SelectItem>
+                        <SelectItem value="Aguardando peça">Aguardando peça</SelectItem>
+                        <SelectItem value="Em reparo">Em reparo</SelectItem>
+                        <SelectItem value="Pronto">Pronto</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <FormItem>
+                    <FormLabel className="text-sm text-muted-foreground">Mão de Obra</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" {...field} value={field.value || "0"} disabled={isFinalized} />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={itemTechnicals[item.itemNumber]?.serviceValue || "0"}
+                        onChange={(e) => setItemTechnicals((current) => ({
+                          ...current,
+                          [item.itemNumber]: {
+                            ...current[item.itemNumber],
+                            serviceValue: e.target.value,
+                          },
+                        }))}
+                        disabled={isFinalized}
+                      />
                     </FormControl>
                   </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="partsValue"
-                render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Peças</FormLabel>
+                    <FormLabel className="text-sm text-muted-foreground">Peças</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" {...field} value={field.value || "0"} disabled={isFinalized} />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={itemTechnicals[item.itemNumber]?.partsValue || "0"}
+                        onChange={(e) => setItemTechnicals((current) => ({
+                          ...current,
+                          [item.itemNumber]: {
+                            ...current[item.itemNumber],
+                            partsValue: e.target.value,
+                          },
+                        }))}
+                        disabled={isFinalized}
+                      />
                     </FormControl>
                   </FormItem>
-                )}
-              />
-            </div>
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-muted p-3 text-sm">
+                  <span className="font-medium">Total do Item</span>
+                  <span className="font-bold text-primary">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                      Number(itemTechnicals[item.itemNumber]?.serviceValue || 0) +
+                      Number(itemTechnicals[item.itemNumber]?.partsValue || 0)
+                    )}
+                  </span>
+                </div>
+
+                <FormItem>
+                  <FormLabel className="text-sm text-muted-foreground">Peças Utilizadas</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Liste as peças utilizadas neste item"
+                      value={itemTechnicals[item.itemNumber]?.partsDescription || ""}
+                      onChange={(e) => setItemTechnicals((current) => ({
+                        ...current,
+                        [item.itemNumber]: {
+                          ...current[item.itemNumber],
+                          partsDescription: e.target.value,
+                        },
+                      }))}
+                      disabled={isFinalized}
+                    />
+                  </FormControl>
+                </FormItem>
+              </div>
+            ))}
           </div>
 
           <div className="flex items-center justify-between rounded-lg bg-muted p-4">
-            <span className="font-semibold">Total:</span>
+            <span className="font-semibold">Total da OS:</span>
             <span className="text-lg font-bold text-primary sm:text-xl">
               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                Number(form.watch("serviceValue") || 0) + Number(form.watch("partsValue") || 0)
+                itemSummaries.reduce((sum, item) => (
+                  sum +
+                  Number(itemTechnicals[item.itemNumber]?.serviceValue || 0) +
+                  Number(itemTechnicals[item.itemNumber]?.partsValue || 0)
+                ), 0)
               )}
             </span>
           </div>
@@ -560,14 +702,14 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
           />
 
           <DialogFooter className="!flex-col gap-2 sm:!flex-row">
-            {!isFinalized && (
+            {canTriggerDelivery && (
               <Button 
                 type="button" 
                 variant="outline" 
                 className="text-orange-600 border-orange-200 hover:bg-orange-50"
                 onClick={onFinalize}
               >
-                <CheckCircle2 className="w-4 h-4 mr-2" /> Dar Baixa
+                <CheckCircle2 className="w-4 h-4 mr-2" /> {itemSummaries.length > 1 ? "Entregar Itens" : "Dar Baixa"}
               </Button>
             )}
             <div className="flex-1" />
@@ -588,6 +730,8 @@ function OrderDetails({ order, onClose, onFinalize }: { order: any, onClose: () 
 
 function BudgetSection({ order, isFinalized, hasPermission, user, onUpdate, toast }: any) {
   const [isOpen, setIsOpen] = useState(true);
+  const { data: appliances = [] } = useAppliances(order.customerId);
+  const itemSummaries = getOrderItemsSummary(order, appliances);
   
   const isBudgetApproved = order.budgetStatus === "APROVADO";
   const isBudgetRefused = order.budgetStatus === "RECUSADO";
@@ -605,10 +749,7 @@ function BudgetSection({ order, isFinalized, hasPermission, user, onUpdate, toas
   };
 
   const sendWhatsApp = () => {
-    const trackingUrl = order.trackingToken 
-      ? `${window.location.origin}/acompanhamento/${order.trackingToken}`
-      : "";
-    const message = `Olá ${order.customer.name}!\n\nSegue o orçamento para a OS #${order.id}:\n\n*Aparelho:* ${order.appliance.type} ${order.appliance.brand}\n*Defeito:* ${order.defect}\n*Diagnóstico:* ${order.diagnosis || "Em análise"}\n\n*Valores:*\nMão de Obra: R$ ${order.serviceValue}\nPeças: R$ ${order.partsValue}\n*Total: R$ ${order.totalValue}*\n\n*Validade:* ${order.budgetValidityDays || 7} dias\n\n${trackingUrl ? `Acompanhe e aprove online: ${trackingUrl}` : ""}`;
+    const message = `Olá ${order.customer.name}!\n\nSegue o orçamento para a OS #${order.id}:\n\n${itemSummaries.map((item) => `*Item ${item.itemNumber}:* ${item.applianceLabel}\n*Defeito:* ${item.defect}\n*Diagnóstico:* ${item.diagnosis || "Em análise"}\n*Mão de Obra:* R$ ${item.serviceValue}\n*Peças:* R$ ${item.partsValue}\n*Total:* R$ ${item.totalValue}`).join("\n\n")}\n\n*Validade:* ${order.budgetValidityDays || 7} dias`;
     window.open(`https://wa.me/55${order.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, "_blank");
     
     onUpdate({ id: order.id, budgetSentAt: new Date() });
@@ -728,6 +869,10 @@ function FinalizationForm({ order, onClose }: { order: any, onClose: () => void 
   const { mutate: update, isPending } = useUpdateServiceOrder();
   const { toast } = useToast();
   const { user } = useAuth();
+  const { data: appliances = [] } = useAppliances(order.customerId);
+  const itemSummaries = getOrderItemsSummary(order, appliances);
+  const isLegacySingleItem = itemSummaries.length === 1 && !itemSummaries[0]?.id;
+  const openItems = itemSummaries.filter((item) => !isOrderItemFinalized(item));
   const [finalStatus, setFinalStatus] = useState<string>("");
   const [deliveredTo, setDeliveredTo] = useState("");
   const [notes, setNotes] = useState("");
@@ -736,13 +881,39 @@ function FinalizationForm({ order, onClose }: { order: any, onClose: () => void 
   const [warrantyDays, setWarrantyDays] = useState(order.warrantyDays?.toString() || "90");
   const [finalizationSuccess, setFinalizationSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [lastPrintedItemNumbers, setLastPrintedItemNumbers] = useState<number[]>([]);
+  const [selectedItemNumbers, setSelectedItemNumbers] = useState<number[]>(
+    openItems.length ? openItems.map((item) => item.itemNumber) : itemSummaries.map((item) => item.itemNumber)
+  );
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      "ENTREGUE": "Consertado e entregue",
+      "NAO_AUTORIZADO": "Não autorizado (retirado)",
+      "DESCARTE_AUTORIZADO": "Autorizado para descarte"
+    };
+    return labels[status] || status;
+  };
+
+  const isCompletingOrder = isLegacySingleItem || (openItems.length > 0 && selectedItemNumbers.length === openItems.length);
 
   const handleFinalize = () => {
     if (!finalStatus) return;
     setErrorMessage(null);
 
-    update({ 
-      id: order.id, 
+    const selectedItems = isLegacySingleItem
+      ? itemSummaries
+      : openItems.filter((item) => selectedItemNumbers.includes(item.itemNumber));
+
+    if (!selectedItems.length) {
+      setErrorMessage("Selecione ao menos um item para registrar a saída.");
+      return;
+    }
+
+    const selectedItemsParam = selectedItems.map((item) => item.itemNumber);
+
+    update(isLegacySingleItem ? {
+      id: order.id,
       status: finalStatus === "ENTREGUE" ? "Entregue" : order.status,
       finalStatus,
       deliveredTo: deliveredTo || null,
@@ -752,10 +923,24 @@ function FinalizationForm({ order, onClose }: { order: any, onClose: () => void 
       warrantyDays: warrantyDays ? parseInt(warrantyDays) : 90,
       exitDate: new Date(),
       finalizedBy: user?.username || "Usuário"
-    }, { 
+    } : {
+      id: order.id,
+      ...(isCompletingOrder && finalStatus === "ENTREGUE" ? { paymentMethod: paymentMethod || null } : {}),
+      items: selectedItems.map((item) => ({
+        id: item.id || undefined,
+        itemNumber: item.itemNumber,
+        status: finalStatus === "ENTREGUE" ? "Entregue" : item.status || undefined,
+        partsDescription: partsDescription || item.partsDescription || null,
+        warrantyDays: warrantyDays ? parseInt(warrantyDays) : (item.warrantyDays || 90),
+        exitDate: new Date(),
+        finalStatus,
+        finalizedBy: user?.username || "Usuário",
+        deliveredTo: deliveredTo || null,
+        finalNotes: notes || null,
+      })),
+    }, {
       onSuccess: async () => {
-        // Record payment if finalized as ENTREGUE
-        if (finalStatus === "ENTREGUE") {
+        if (finalStatus === "ENTREGUE" && isLegacySingleItem) {
           try {
             await apiRequest("POST", "/api/payments", {
               orderId: order.id,
@@ -767,31 +952,28 @@ function FinalizationForm({ order, onClose }: { order: any, onClose: () => void 
           }
         }
 
-        toast({ 
-          title: "OS finalizada com sucesso!", 
-          description: `Status: ${getStatusLabel(finalStatus)}` 
+        toast({
+          title: isCompletingOrder ? "OS finalizada com sucesso!" : "Saída parcial registrada!",
+          description: isCompletingOrder
+            ? `Status: ${getStatusLabel(finalStatus)}`
+            : `${selectedItems.length} item(ns) entregue(s) nesta saída`
         });
+        setLastPrintedItemNumbers(selectedItemsParam);
         setFinalizationSuccess(true);
+        setTimeout(() => {
+          window.open(`/print/exit/${order.id}?items=${selectedItemsParam.join(",")}`, "_blank");
+        }, 150);
       },
       onError: (error) => {
         const message = error instanceof Error ? error.message : "Erro desconhecido ao finalizar";
         setErrorMessage(message);
-        toast({ 
-          title: "Erro ao finalizar OS", 
+        toast({
+          title: "Erro ao finalizar OS",
           description: message,
           variant: "destructive"
         });
       }
     });
-  };
-
-  const getStatusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      "ENTREGUE": "Consertado e entregue",
-      "NAO_AUTORIZADO": "Não autorizado (retirado)",
-      "DESCARTE_AUTORIZADO": "Autorizado para descarte"
-    };
-    return labels[status] || status;
   };
 
   if (finalizationSuccess) {
@@ -800,7 +982,7 @@ function FinalizationForm({ order, onClose }: { order: any, onClose: () => void 
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-green-700">
             <CheckCircle2 className="w-5 h-5" />
-            OS {order.orderNumber} Finalizada!
+            Baixa registrada para {order.orderNumber}
           </DialogTitle>
         </DialogHeader>
         <div className="py-6 space-y-4">
@@ -808,10 +990,10 @@ function FinalizationForm({ order, onClose }: { order: any, onClose: () => void 
             Status: <span className="font-medium">{getStatusLabel(finalStatus)}</span>
           </p>
           <div className="space-y-2">
-            <Button 
+            <Button
               className="w-full"
               variant="outline"
-              onClick={() => window.open(`/print/exit/${order.id}`, '_blank')}
+              onClick={() => window.open(`/print/exit/${order.id}?items=${lastPrintedItemNumbers.join(",")}`, "_blank")}
             >
               <Printer className="w-4 h-4 mr-2" /> Imprimir Nota de Saída (Térmica)
             </Button>
@@ -840,6 +1022,51 @@ function FinalizationForm({ order, onClose }: { order: any, onClose: () => void 
       )}
 
       <div className="space-y-4 py-4">
+        {!isLegacySingleItem && (
+          <div className="space-y-3 rounded-lg border p-4">
+            <div>
+              <p className="text-sm font-medium">Itens desta saída</p>
+              <p className="text-xs text-muted-foreground">
+                Selecione apenas os itens que estão sendo entregues agora.
+              </p>
+            </div>
+            <div className="space-y-3">
+              {itemSummaries.map((item) => {
+                const isClosed = isOrderItemFinalized(item);
+
+                return (
+                  <label
+                    key={item.itemNumber}
+                    className={`flex items-start gap-3 rounded-lg border p-3 ${isClosed ? "bg-muted/50 opacity-70" : ""}`}
+                  >
+                    <Checkbox
+                      checked={isClosed || selectedItemNumbers.includes(item.itemNumber)}
+                      disabled={isClosed}
+                      onCheckedChange={(checked) => {
+                        if (isClosed) return;
+                        setSelectedItemNumbers((current) =>
+                          checked
+                            ? Array.from(new Set([...current, item.itemNumber]))
+                            : current.filter((itemNumber) => itemNumber !== item.itemNumber)
+                        );
+                      }}
+                    />
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">{item.applianceLabel}</p>
+                      <p className="text-xs text-muted-foreground">{item.defect}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {isClosed
+                          ? `Já finalizado: ${getStatusLabel(item.finalStatus || "ENTREGUE")}`
+                          : `Status atual: ${item.status || "Recebido"}`}
+                      </p>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="space-y-2">
           <label className="text-sm font-medium">Situação de Finalização *</label>
           <Select onValueChange={setFinalStatus} value={finalStatus}>
@@ -863,21 +1090,23 @@ function FinalizationForm({ order, onClose }: { order: any, onClose: () => void 
           />
         </div>
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Forma de Pagamento</label>
-          <Select onValueChange={setPaymentMethod} value={paymentMethod}>
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Dinheiro">Dinheiro</SelectItem>
-              <SelectItem value="PIX">PIX</SelectItem>
-              <SelectItem value="Cartão Débito">Cartão Débito</SelectItem>
-              <SelectItem value="Cartão Crédito">Cartão Crédito</SelectItem>
-              <SelectItem value="Transferência">Transferência</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        {(isLegacySingleItem || isCompletingOrder) && (
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Forma de Pagamento</label>
+            <Select onValueChange={setPaymentMethod} value={paymentMethod}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                <SelectItem value="PIX">PIX</SelectItem>
+                <SelectItem value="Cartão Débito">Cartão Débito</SelectItem>
+                <SelectItem value="Cartão Crédito">Cartão Crédito</SelectItem>
+                <SelectItem value="Transferência">Transferência</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="space-y-2">
           <label className="text-sm font-medium">Peças Utilizadas</label>
