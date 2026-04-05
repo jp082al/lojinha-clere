@@ -153,13 +153,30 @@ export const insertServiceOrderPickupWarningSchema = createInsertSchema(serviceO
   warningDeadlineAt: z.coerce.date(),
 }).omit({ id: true });
 
+export const insertServiceOrderDeliveryBatchSchema = createInsertSchema(serviceOrderDeliveryBatches, {
+  entryDateSnapshot: z.coerce.date().nullable().optional(),
+  deliveredAt: z.coerce.date().optional(),
+}).omit({ id: true, createdAt: true });
+
+export const insertServiceOrderDeliveryBatchItemSchema = createInsertSchema(serviceOrderDeliveryBatchItems).omit({ id: true, createdAt: true });
+
 export type ServiceOrder = typeof serviceOrders.$inferSelect;
 export type InsertServiceOrder = z.infer<typeof insertServiceOrderSchema>;
 export type ServiceOrderItem = typeof serviceOrderItems.$inferSelect;
 export type InsertServiceOrderItem = z.infer<typeof insertServiceOrderItemSchema>;
 export type ServiceOrderPickupWarning = typeof serviceOrderPickupWarnings.$inferSelect;
 export type InsertServiceOrderPickupWarning = z.infer<typeof insertServiceOrderPickupWarningSchema>;
-export type ServiceOrderItemView = Omit<ServiceOrderItem, "id"> & { id: number | null };
+export type ServiceOrderDeliveryBatch = typeof serviceOrderDeliveryBatches.$inferSelect;
+export type InsertServiceOrderDeliveryBatch = z.infer<typeof insertServiceOrderDeliveryBatchSchema>;
+export type ServiceOrderDeliveryBatchItem = typeof serviceOrderDeliveryBatchItems.$inferSelect;
+export type InsertServiceOrderDeliveryBatchItem = z.infer<typeof insertServiceOrderDeliveryBatchItemSchema>;
+export type ServiceOrderItemView = Omit<ServiceOrderItem, "id"> & {
+  id: number | null;
+  appliance?: Appliance | null;
+};
+export type ServiceOrderDeliveryBatchWithItems = ServiceOrderDeliveryBatch & {
+  items: ServiceOrderDeliveryBatchItem[];
+};
 export type ServiceOrderWithRelations = ServiceOrder & {
   customer: Customer;
   appliance: Appliance;

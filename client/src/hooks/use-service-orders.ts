@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
 import type { CreateServiceOrderInput, UpdateServiceOrderInput } from "@shared/routes";
-import type { InsertServiceOrder, ServiceOrder } from "@shared/schema";
+import type { InsertServiceOrder, ServiceOrder, ServiceOrderDeliveryBatchWithItems } from "@shared/schema";
 
 export function useServiceOrders() {
   return useQuery({
@@ -26,6 +26,28 @@ export function useServiceOrder(id: number) {
     },
     enabled: !!id,
   });
+}
+
+export function useServiceOrderDeliveryBatches(id: number) {
+  return useQuery({
+    queryKey: [api.serviceOrders.deliveryBatches.path, id],
+    queryFn: async () => {
+      const url = buildUrl(api.serviceOrders.deliveryBatches.path, { id });
+      const res = await fetch(url, { credentials: "include" });
+      if (res.status === 404) return [];
+      if (!res.ok) throw new Error("Failed to fetch delivery batches");
+      return api.serviceOrders.deliveryBatches.responses[200].parse(await res.json());
+    },
+    enabled: !!id,
+  });
+}
+
+export async function fetchServiceOrderDeliveryBatches(id: number): Promise<ServiceOrderDeliveryBatchWithItems[]> {
+  const url = buildUrl(api.serviceOrders.deliveryBatches.path, { id });
+  const res = await fetch(url, { credentials: "include" });
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error("Failed to fetch delivery batches");
+  return api.serviceOrders.deliveryBatches.responses[200].parse(await res.json());
 }
 
 export function useCreateServiceOrder() {
@@ -70,7 +92,11 @@ export function useUpdateServiceOrder() {
       }
       return api.serviceOrders.update.responses[200].parse(await res.json());
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: [api.serviceOrders.list.path] }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: [api.serviceOrders.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.serviceOrders.get.path, variables.id] });
+      queryClient.invalidateQueries({ queryKey: [api.serviceOrders.deliveryBatches.path, variables.id] });
+    },
   });
 }
 

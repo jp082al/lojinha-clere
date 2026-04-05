@@ -4,6 +4,8 @@ import {
   appliances,
   serviceOrders,
   serviceOrderItems,
+  serviceOrderDeliveryBatches,
+  serviceOrderDeliveryBatchItems,
   serviceOrderPickupWarnings,
   payments,
   cashClosings,
@@ -17,6 +19,9 @@ import {
   type ServiceOrderItem,
   type InsertServiceOrderItem,
   type ServiceOrderItemView,
+  type ServiceOrderDeliveryBatch,
+  type ServiceOrderDeliveryBatchItem,
+  type ServiceOrderDeliveryBatchWithItems,
   type ServiceOrderWithRelations,
   type ServiceOrderPickupWarning,
   type Payment,
@@ -43,6 +48,8 @@ export interface IStorage {
   getServiceOrders(): Promise<ServiceOrderWithRelations[]>;
   getServiceOrder(id: number): Promise<ServiceOrderWithRelations | undefined>;
   getServiceOrderByToken(token: string): Promise<ServiceOrderWithRelations | undefined>;
+  getServiceOrderDeliveryBatches(orderId: number): Promise<ServiceOrderDeliveryBatchWithItems[]>;
+  getServiceOrderDeliveryBatch(orderId: number, batchId: number): Promise<ServiceOrderDeliveryBatchWithItems | undefined>;
   getPickupWarningOrders(): Promise<Array<{
     id: number;
     orderNumber: string | null;
@@ -280,7 +287,7 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  private buildLegacyCompatibleItem(order: ServiceOrder): ServiceOrderItemView {
+  private buildLegacyCompatibleItem(order: ServiceOrder, appliance?: Appliance | null): ServiceOrderItemView {
     return {
       id: null,
       serviceOrderId: order.id,
@@ -302,7 +309,168 @@ export class DatabaseStorage implements IStorage {
       finalNotes: order.finalNotes,
       createdAt: order.entryDate,
       updatedAt: order.entryDate,
+      appliance: appliance ?? null,
     };
+  }
+
+  private buildLegacyCompatibleDeliveryItem(order: ServiceOrder): Pick<
+    ServiceOrderItemView,
+    | "id"
+    | "serviceOrderId"
+    | "applianceId"
+    | "itemNumber"
+    | "defect"
+    | "diagnosis"
+    | "partsDescription"
+    | "serviceValue"
+    | "partsValue"
+    | "totalValue"
+    | "warrantyDays"
+    | "exitDate"
+    | "finalizedBy"
+    | "deliveredTo"
+    | "finalNotes"
+  > {
+    return {
+      id: null,
+      serviceOrderId: order.id,
+      applianceId: order.applianceId,
+      itemNumber: 1,
+      defect: order.defect,
+      diagnosis: order.diagnosis,
+      partsDescription: order.partsDescription,
+      serviceValue: order.serviceValue,
+      partsValue: order.partsValue,
+      totalValue: order.totalValue,
+      warrantyDays: order.warrantyDays,
+      exitDate: order.exitDate,
+      finalizedBy: order.finalizedBy,
+      deliveredTo: order.deliveredTo,
+      finalNotes: order.finalNotes,
+    };
+  }
+
+  private async getDeliveryBatchItemsByBatchIds(batchIds: number[]): Promise<Map<number, ServiceOrderDeliveryBatchItem[]>> {
+    if (!batchIds.length) {
+      return new Map();
+    }
+
+    const items = await db
+      .select()
+      .from(serviceOrderDeliveryBatchItems)
+      .where(inArray(serviceOrderDeliveryBatchItems.batchId, batchIds))
+      .orderBy(
+        asc(serviceOrderDeliveryBatchItems.batchId),
+        asc(serviceOrderDeliveryBatchItems.itemNumberSnapshot),
+        asc(serviceOrderDeliveryBatchItems.id),
+      );
+
+    const itemsByBatchId = new Map<number, ServiceOrderDeliveryBatchItem[]>();
+
+    for (const item of items) {
+      const batchItems = itemsByBatchId.get(item.batchId) ?? [];
+      batchItems.push(item);
+      itemsByBatchId.set(item.batchId, batchItems);
+    }
+
+    return itemsByBatchId;
+  }
+
+  private async getDeliveryBatchesByServiceOrderId(serviceOrderId: number): Promise<ServiceOrderDeliveryBatchWithItems[]> {
+    const batches = await db
+      .select()
+      .from(serviceOrderDeliveryBatches)
+      .where(eq(serviceOrderDeliveryBatches.serviceOrderId, serviceOrderId))
+      .orderBy(desc(serviceOrderDeliveryBatches.deliveredAt), desc(serviceOrderDeliveryBatches.id));
+
+    const itemsByBatchId = await this.getDeliveryBatchItemsByBatchIds(batches.map((batch) => batch.id));
+
+    return batches.map((batch) => ({
+      ...batch,
+      items: itemsByBatchId.get(batch.id) ?? [],
+    }));
+  }
+
+  private async createDeliveryBatch(
+    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+    params: {
+      order: ServiceOrder;
+      customer: Customer;
+      selectedItems: Array<Pick<
+        ServiceOrderItemView,
+        | "id"
+        | "serviceOrderId"
+        | "applianceId"
+        | "itemNumber"
+        | "defect"
+        | "diagnosis"
+        | "partsDescription"
+        | "serviceValue"
+        | "partsValue"
+        | "totalValue"
+        | "warrantyDays"
+        | "exitDate"
+        | "finalizedBy"
+        | "deliveredTo"
+        | "finalNotes"
+      >>;
+      deliveredAt: Date;
+      finalizedBy: string;
+      deliveredTo?: string | null;
+      finalNotes?: string | null;
+      paymentMethod?: string | null;
+      isPartial: boolean;
+    },
+  ): Promise<ServiceOrderDeliveryBatch> {
+    const applianceIds = Array.from(new Set(params.selectedItems.map((item) => item.applianceId).filter((value): value is number => Number.isInteger(value))));
+    const applianceRows = applianceIds.length
+      ? await tx.select().from(appliances).where(inArray(appliances.id, applianceIds))
+      : [];
+    const appliancesById = new Map(applianceRows.map((appliance) => [appliance.id, appliance]));
+
+    const [batch] = await tx
+      .insert(serviceOrderDeliveryBatches)
+      .values({
+        serviceOrderId: params.order.id,
+        orderNumberSnapshot: params.order.orderNumber,
+        customerNameSnapshot: params.customer.name,
+        customerPhoneSnapshot: params.customer.phone,
+        customerAddressSnapshot: params.customer.address,
+        entryDateSnapshot: params.order.entryDate,
+        deliveredAt: params.deliveredAt,
+        finalizedBy: params.finalizedBy,
+        deliveredTo: params.deliveredTo ?? null,
+        finalNotes: params.finalNotes ?? null,
+        paymentMethod: params.paymentMethod ?? null,
+        isPartial: params.isPartial,
+      })
+      .returning();
+
+    await tx.insert(serviceOrderDeliveryBatchItems).values(
+      params.selectedItems.map((item) => {
+        const appliance = item.applianceId ? appliancesById.get(item.applianceId) : null;
+
+        return {
+          batchId: batch.id,
+          serviceOrderItemId: item.id ?? null,
+          applianceId: item.applianceId ?? null,
+          itemNumberSnapshot: item.itemNumber,
+          applianceTypeSnapshot: appliance?.type ?? "Aparelho",
+          applianceBrandSnapshot: appliance?.brand ?? "",
+          applianceModelSnapshot: appliance?.model ?? "",
+          applianceSerialNumberSnapshot: appliance?.serialNumber ?? null,
+          defectSnapshot: item.defect,
+          diagnosisSnapshot: item.diagnosis ?? null,
+          partsDescriptionSnapshot: item.partsDescription ?? null,
+          serviceValueSnapshot: this.normalizeMoneyValue(item.serviceValue),
+          partsValueSnapshot: this.normalizeMoneyValue(item.partsValue),
+          totalValueSnapshot: this.normalizeMoneyValue(item.totalValue),
+          warrantyDaysSnapshot: item.warrantyDays ?? 90,
+        };
+      }),
+    );
+
+    return batch;
   }
 
   private async getItemsByServiceOrderIds(serviceOrderIds: number[]): Promise<Map<number, ServiceOrderItemView[]>> {
@@ -310,18 +478,25 @@ export class DatabaseStorage implements IStorage {
       return new Map();
     }
 
-    const items = await db
-      .select()
+    const rows = await db
+      .select({
+        item: serviceOrderItems,
+        appliance: appliances,
+      })
       .from(serviceOrderItems)
+      .leftJoin(appliances, eq(serviceOrderItems.applianceId, appliances.id))
       .where(inArray(serviceOrderItems.serviceOrderId, serviceOrderIds))
       .orderBy(asc(serviceOrderItems.serviceOrderId), asc(serviceOrderItems.itemNumber), asc(serviceOrderItems.id));
 
     const itemsByOrderId = new Map<number, ServiceOrderItemView[]>();
 
-    for (const item of items) {
-      const orderItems = itemsByOrderId.get(item.serviceOrderId) ?? [];
-      orderItems.push(item);
-      itemsByOrderId.set(item.serviceOrderId, orderItems);
+    for (const row of rows) {
+      const orderItems = itemsByOrderId.get(row.item.serviceOrderId) ?? [];
+      orderItems.push({
+        ...row.item,
+        appliance: row.appliance,
+      });
+      itemsByOrderId.set(row.item.serviceOrderId, orderItems);
     }
 
     return itemsByOrderId;
@@ -391,7 +566,7 @@ export class DatabaseStorage implements IStorage {
       ...row.serviceOrder,
       customer: row.customer,
       appliance: row.appliance,
-      items: itemsByOrderId.get(row.serviceOrder.id) ?? [this.buildLegacyCompatibleItem(row.serviceOrder)],
+      items: itemsByOrderId.get(row.serviceOrder.id) ?? [this.buildLegacyCompatibleItem(row.serviceOrder, row.appliance)],
     }));
   }
 
@@ -417,7 +592,7 @@ export class DatabaseStorage implements IStorage {
       ...row.serviceOrder,
       customer: row.customer,
       appliance: row.appliance,
-      items: itemsByOrderId.get(row.serviceOrder.id) ?? [this.buildLegacyCompatibleItem(row.serviceOrder)],
+      items: itemsByOrderId.get(row.serviceOrder.id) ?? [this.buildLegacyCompatibleItem(row.serviceOrder, row.appliance)],
     };
   }
 
@@ -443,7 +618,43 @@ export class DatabaseStorage implements IStorage {
       ...row.serviceOrder,
       customer: row.customer,
       appliance: row.appliance,
-      items: itemsByOrderId.get(row.serviceOrder.id) ?? [this.buildLegacyCompatibleItem(row.serviceOrder)],
+      items: itemsByOrderId.get(row.serviceOrder.id) ?? [this.buildLegacyCompatibleItem(row.serviceOrder, row.appliance)],
+    };
+  }
+
+  async getServiceOrderDeliveryBatches(orderId: number): Promise<ServiceOrderDeliveryBatchWithItems[]> {
+    const [order] = await db
+      .select({ id: serviceOrders.id })
+      .from(serviceOrders)
+      .where(eq(serviceOrders.id, orderId))
+      .limit(1);
+
+    if (!order) {
+      return [];
+    }
+
+    return this.getDeliveryBatchesByServiceOrderId(orderId);
+  }
+
+  async getServiceOrderDeliveryBatch(orderId: number, batchId: number): Promise<ServiceOrderDeliveryBatchWithItems | undefined> {
+    const [batch] = await db
+      .select()
+      .from(serviceOrderDeliveryBatches)
+      .where(and(
+        eq(serviceOrderDeliveryBatches.id, batchId),
+        eq(serviceOrderDeliveryBatches.serviceOrderId, orderId),
+      ))
+      .limit(1);
+
+    if (!batch) {
+      return undefined;
+    }
+
+    const itemsByBatchId = await this.getDeliveryBatchItemsByBatchIds([batch.id]);
+
+    return {
+      ...batch,
+      items: itemsByBatchId.get(batch.id) ?? [],
     };
   }
 
@@ -691,6 +902,12 @@ export class DatabaseStorage implements IStorage {
         return undefined;
       }
 
+      const [customerRow] = await tx
+        .select()
+        .from(customers)
+        .where(eq(customers.id, order.customerId))
+        .limit(1);
+
       const [primaryItem] = await tx
         .select()
         .from(serviceOrderItems)
@@ -798,6 +1015,70 @@ export class DatabaseStorage implements IStorage {
               finalizedBy: aggregateFinalization.finalizedBy,
             })
             .where(eq(serviceOrders.id, id));
+        }
+      }
+
+      const hasLegacyFinalizationUpdate =
+        serviceOrderUpdateData.finalStatus !== undefined ||
+        serviceOrderUpdateData.exitDate !== undefined ||
+        serviceOrderUpdateData.status === "Entregue";
+      const finalizedItemRefs = (itemUpdates ?? []).filter((itemUpdate) =>
+        itemUpdate.finalStatus !== undefined ||
+        itemUpdate.exitDate !== undefined ||
+        itemUpdate.status === "Entregue",
+      );
+
+      if (customerRow && (hasLegacyFinalizationUpdate || finalizedItemRefs.length > 0)) {
+        const allItems = await tx
+          .select()
+          .from(serviceOrderItems)
+          .where(eq(serviceOrderItems.serviceOrderId, id))
+          .orderBy(asc(serviceOrderItems.itemNumber), asc(serviceOrderItems.id));
+
+        const selectedItems = finalizedItemRefs.length
+          ? allItems.filter((item) =>
+            finalizedItemRefs.some((ref) =>
+              (ref.id && item.id === ref.id) ||
+              (ref.itemNumber && item.itemNumber === ref.itemNumber),
+            ),
+          )
+          : (primaryItem
+            ? [allItems.find((item) => item.id === primaryItem.id) ?? primaryItem]
+            : [this.buildLegacyCompatibleDeliveryItem(order)]);
+
+        if (selectedItems.length) {
+          const isPartial = allItems.length
+            ? allItems.some((item) => !this.isItemFinalized(item))
+            : false;
+          const deliveredAt = selectedItems
+            .map((item) => item.exitDate)
+            .filter((value): value is Date => value instanceof Date)
+            .sort((a, b) => b.getTime() - a.getTime())[0]
+            ?? (serviceOrderUpdateData.exitDate instanceof Date ? serviceOrderUpdateData.exitDate : new Date());
+          const finalizedBy = selectedItems
+            .map((item) => item.finalizedBy)
+            .filter((value): value is string => Boolean(value))
+            .at(-1)
+            ?? serviceOrderUpdateData.finalizedBy
+            ?? "Usuário";
+          const deliveredTo = selectedItems
+            .map((item) => item.deliveredTo)
+            .filter((value): value is string => Boolean(value));
+          const finalNotes = selectedItems
+            .map((item) => item.finalNotes)
+            .filter((value): value is string => Boolean(value));
+
+          await this.createDeliveryBatch(tx, {
+            order,
+            customer: customerRow,
+            selectedItems,
+            deliveredAt,
+            finalizedBy,
+            deliveredTo: deliveredTo.at(-1) ?? serviceOrderUpdateData.deliveredTo ?? null,
+            finalNotes: finalNotes.at(-1) ?? serviceOrderUpdateData.finalNotes ?? null,
+            paymentMethod: serviceOrderUpdateData.paymentMethod ?? order.paymentMethod ?? null,
+            isPartial,
+          });
         }
       }
 

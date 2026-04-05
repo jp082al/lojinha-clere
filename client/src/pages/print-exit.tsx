@@ -5,23 +5,37 @@ import { ptBR } from "date-fns/locale";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { type SystemSettings } from "@shared/schema";
-import { getOrderItemsSummary, hasOrderItems, isOrderItemFinalized } from "@/lib/service-order-items";
+import { api, buildUrl } from "@shared/routes";
+import { type ServiceOrderDeliveryBatchWithItems, type SystemSettings } from "@shared/schema";
+import { getOrderItemsSummaryWithOptions, hasOrderItems, isOrderItemFinalized } from "@/lib/service-order-items";
 import { useAppliances } from "@/hooks/use-appliances";
 
 export default function PrintExit() {
   const [, params] = useRoute("/print/exit/:id");
   const osId = Number(params?.id);
+  const urlParams = new URLSearchParams(window.location.search);
+  const batchId = Number(urlParams.get("batchId") || 0);
   const { data: order, isLoading: orderLoading } = useServiceOrder(osId);
   const { data: appliances = [], isLoading: appliancesLoading } = useAppliances(order?.customerId || 0);
+  const { data: deliveryBatch, isLoading: batchLoading } = useQuery<ServiceOrderDeliveryBatchWithItems | null>({
+    queryKey: [api.serviceOrders.deliveryBatch.path, osId, batchId],
+    queryFn: async () => {
+      if (!batchId) return null;
+      const url = buildUrl(api.serviceOrders.deliveryBatch.path, { id: osId, batchId });
+      const res = await fetch(url, { credentials: "include" });
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error("Failed to fetch delivery batch");
+      return api.serviceOrders.deliveryBatch.responses[200].parse(await res.json());
+    },
+    enabled: !!osId && !!batchId,
+  });
 
   const { data: settings, isLoading: settingsLoading } = useQuery<SystemSettings>({
     queryKey: ["/api/settings"],
   });
 
-  const isLoading = orderLoading || settingsLoading || appliancesLoading;
+  const isLoading = orderLoading || settingsLoading || appliancesLoading || batchLoading;
 
-  const urlParams = new URLSearchParams(window.location.search);
   const size = urlParams.get("size") || "80";
   const width = size === "58" ? "48mm" : "72mm";
   const selectedItemNumbers = (urlParams.get("items") || "")
@@ -30,10 +44,10 @@ export default function PrintExit() {
     .filter((value) => Number.isInteger(value) && value > 0);
 
   useEffect(() => {
-    if (order && !isLoading) {
+    if (order && !isLoading && (!batchId || deliveryBatch)) {
       setTimeout(() => window.print(), 500);
     }
-  }, [order, isLoading]);
+  }, [order, isLoading, batchId, deliveryBatch]);
 
   if (isLoading) {
     return (
@@ -51,7 +65,17 @@ export default function PrintExit() {
     );
   }
 
-  const itemSummaries = getOrderItemsSummary(order, appliances);
+  if (batchId && !deliveryBatch) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p>Registro de saída não encontrado.</p>
+      </div>
+    );
+  }
+
+  const itemSummaries = getOrderItemsSummaryWithOptions(order, appliances, {
+    strictItemFields: true,
+  });
   const orderHasItems = hasOrderItems(order);
   const explicitlySelectedItems = selectedItemNumbers.length
     ? itemSummaries.filter((item) => selectedItemNumbers.includes(item.itemNumber))
@@ -73,26 +97,91 @@ export default function PrintExit() {
     : Number(order.totalValue ?? (serviceVal + partsVal));
   const warrantyDays = displayedItems[0]?.warrantyDays ?? order.warrantyDays ?? 90;
   const customerAddress = order.customer.address || "Não informado";
-  const deliveredTo = displayedItems
-    .map((item) => item.deliveredTo)
-    .find(Boolean) ?? order.deliveredTo;
-  const finalNotes = displayedItems
-    .map((item) => item.finalNotes)
-    .filter(Boolean)
-    .join("\n\n") || order.finalNotes;
-  const exitDate = displayedItems
+  const deliveredToValues = Array.from(new Set(displayedItems.map((item) => item.deliveredTo).filter(Boolean)));
+  const deliveredTo = orderHasItems
+    ? (deliveredToValues.join(", ") || null)
+    : (deliveredToValues[0] ?? order.deliveredTo ?? null);
+  const finalNotesValues = Array.from(new Set(displayedItems.map((item) => item.finalNotes).filter(Boolean)));
+  const finalNotes = orderHasItems
+    ? (finalNotesValues.join("\n\n") || null)
+    : (finalNotesValues.join("\n\n") || order.finalNotes || null);
+  const exitDates = displayedItems
     .map((item) => item.exitDate)
     .filter(Boolean)
     .map((value) => new Date(value!))
-    .sort((a, b) => b.getTime() - a.getTime())[0] ?? (order.exitDate ? new Date(order.exitDate) : new Date());
-  const finalizedBy = displayedItems
-    .map((item) => item.finalizedBy)
-    .filter(Boolean)
-    .at(-1) || order.finalizedBy;
+    .sort((a, b) => b.getTime() - a.getTime());
+  const exitDate = orderHasItems
+    ? (exitDates[0] ?? new Date())
+    : (exitDates[0] ?? (order.exitDate ? new Date(order.exitDate) : new Date()));
+  const finalizedByValues = Array.from(new Set(displayedItems.map((item) => item.finalizedBy).filter(Boolean)));
+  const finalizedBy = orderHasItems
+    ? (finalizedByValues.at(-1) ?? null)
+    : (finalizedByValues.at(-1) ?? order.finalizedBy ?? null);
   const paymentMethod = order.paymentMethod || null;
   const isPartialExit = orderHasItems
     ? displayedItems.length < itemSummaries.length || itemSummaries.some((item) => !isOrderItemFinalized(item))
     : false;
+  const batchDisplayedItems = (deliveryBatch?.items ?? []).map((item) => ({
+    itemNumber: item.itemNumberSnapshot,
+    applianceLabel: [item.applianceTypeSnapshot, item.applianceBrandSnapshot, item.applianceModelSnapshot].filter(Boolean).join(" "),
+    serialNumber: item.applianceSerialNumberSnapshot,
+    defect: item.defectSnapshot,
+    diagnosis: item.diagnosisSnapshot,
+    partsDescription: item.partsDescriptionSnapshot,
+    serviceValue: Number(item.serviceValueSnapshot ?? 0),
+    partsValue: Number(item.partsValueSnapshot ?? 0),
+    totalValue: Number(item.totalValueSnapshot ?? 0),
+    warrantyDays: item.warrantyDaysSnapshot ?? 90,
+  }));
+  const displayedData = deliveryBatch ? {
+    title: deliveryBatch.isPartial ? "NOTA DE SAÍDA PARCIAL" : "NOTA DE SAÍDA",
+    orderNumber: deliveryBatch.orderNumberSnapshot || order.orderNumber,
+    customerName: deliveryBatch.customerNameSnapshot,
+    customerPhone: deliveryBatch.customerPhoneSnapshot,
+    customerAddress: deliveryBatch.customerAddressSnapshot || "Não informado",
+    entryDate: deliveryBatch.entryDateSnapshot ? new Date(deliveryBatch.entryDateSnapshot) : (order.entryDate ? new Date(order.entryDate) : null),
+    exitDate: new Date(deliveryBatch.deliveredAt),
+    createdBy: order.createdBy,
+    finalizedBy: deliveryBatch.finalizedBy,
+    deliveredTo: deliveryBatch.deliveredTo,
+    finalNotes: deliveryBatch.finalNotes,
+    paymentMethod: deliveryBatch.paymentMethod,
+    items: batchDisplayedItems,
+    serviceVal: batchDisplayedItems.reduce((sum, item) => sum + item.serviceValue, 0),
+    partsVal: batchDisplayedItems.reduce((sum, item) => sum + item.partsValue, 0),
+    totalVal: batchDisplayedItems.reduce((sum, item) => sum + item.totalValue, 0),
+    warrantyDays: batchDisplayedItems[0]?.warrantyDays ?? order.warrantyDays ?? 90,
+  } : {
+    title: isPartialExit ? "NOTA DE SAÍDA PARCIAL" : "NOTA DE SAÍDA",
+    orderNumber: order.orderNumber,
+    customerName: order.customer.name,
+    customerPhone: order.customer.phone,
+    customerAddress,
+    entryDate: order.entryDate ? new Date(order.entryDate) : null,
+    exitDate,
+    createdBy: order.createdBy,
+    finalizedBy,
+    deliveredTo,
+    finalNotes,
+    paymentMethod,
+    items: displayedItems.map((item) => ({
+      itemNumber: item.itemNumber,
+      applianceLabel: item.applianceLabel,
+      serialNumber: item.appliance?.serialNumber ?? null,
+      defect: item.defect,
+      diagnosis: item.diagnosis,
+      partsDescription: item.partsDescription,
+      observations: item.observations,
+      serviceValue: item.serviceValue,
+      partsValue: item.partsValue,
+      totalValue: item.totalValue,
+      warrantyDays: item.warrantyDays ?? 90,
+    })),
+    serviceVal,
+    partsVal,
+    totalVal,
+    warrantyDays,
+  };
 
   return (
     <>
@@ -214,31 +303,31 @@ export default function PrintExit() {
         </div>
 
         <div className="title">
-          {isPartialExit ? "NOTA DE SAÍDA PARCIAL" : "NOTA DE SAÍDA"}
+          {displayedData.title}
         </div>
 
         <div className="os-number">
-          {order.orderNumber}
+          {displayedData.orderNumber}
         </div>
 
         <div className="divider" />
 
         <div className="section">
           <div className="label">Cliente</div>
-          <div className="bold">{order.customer.name}</div>
-          <div><span className="label">Telefone</span> {order.customer.phone}</div>
-          <div><span className="label">Endereço</span> {customerAddress}</div>
+          <div className="bold">{displayedData.customerName}</div>
+          <div><span className="label">Telefone</span> {displayedData.customerPhone}</div>
+          <div><span className="label">Endereço</span> {displayedData.customerAddress}</div>
         </div>
 
         <div className="divider" />
 
-        {displayedItems.map((item, index) => (
+        {displayedData.items.map((item, index) => (
           <div key={item.itemNumber}>
             <div className="section">
               <div className="label">Item {index + 1} - Aparelho</div>
               <div className="bold">{item.applianceLabel}</div>
-              {item.appliance?.serialNumber && (
-                <div>Série: {item.appliance.serialNumber}</div>
+              {item.serialNumber && (
+                <div>Série: {item.serialNumber}</div>
               )}
             </div>
 
@@ -249,7 +338,7 @@ export default function PrintExit() {
               <div style={{ whiteSpace: "pre-wrap" }}>{item.defect}</div>
             </div>
 
-            {item.observations && (
+            {"observations" in item && item.observations && (
               <>
                 <div className="divider" />
                 <div className="section">
@@ -283,53 +372,53 @@ export default function PrintExit() {
 
         <div className="divider" />
 
-        <div className="section">
-          <div className="row">
+            <div className="section">
+              <div className="row">
             <span className="label">Entrada:</span>
-            <span>{order.entryDate && format(new Date(order.entryDate), "dd/MM/yyyy", { locale: ptBR })}</span>
+            <span>{displayedData.entryDate && format(displayedData.entryDate, "dd/MM/yyyy", { locale: ptBR })}</span>
           </div>
           <div className="row">
             <span className="label">Saída:</span>
-            <span>{format(exitDate, "dd/MM/yyyy", { locale: ptBR })}</span>
+            <span>{format(displayedData.exitDate, "dd/MM/yyyy", { locale: ptBR })}</span>
           </div>
         </div>
 
-        {order.createdBy && (
+        {displayedData.createdBy && (
           <>
             <div className="divider" />
             <div className="section">
               <div className="label">Responsável pela Entrada</div>
-              <div className="bold">{order.createdBy}</div>
+              <div className="bold">{displayedData.createdBy}</div>
             </div>
           </>
         )}
 
-        {finalizedBy && (
+        {displayedData.finalizedBy && (
           <>
             <div className="divider" />
             <div className="section">
               <div className="label">Responsável pela Saída</div>
-              <div className="bold">{finalizedBy}</div>
+              <div className="bold">{displayedData.finalizedBy}</div>
             </div>
           </>
         )}
 
-        {deliveredTo && (
+        {displayedData.deliveredTo && (
           <>
             <div className="divider" />
             <div className="section">
               <div className="label">Entregue Para</div>
-              <div className="bold">{deliveredTo}</div>
+              <div className="bold">{displayedData.deliveredTo}</div>
             </div>
           </>
         )}
 
-        {finalNotes && (
+        {displayedData.finalNotes && (
           <>
             <div className="divider" />
             <div className="section">
               <div className="label">Observações Finais</div>
-              <div style={{ whiteSpace: "pre-wrap" }}>{finalNotes}</div>
+              <div style={{ whiteSpace: "pre-wrap" }}>{displayedData.finalNotes}</div>
             </div>
           </>
         )}
@@ -339,28 +428,28 @@ export default function PrintExit() {
         <div className="section">
           <div className="row">
             <span>Mão de Obra:</span>
-            <span>R$ {serviceVal.toFixed(2)}</span>
+            <span>R$ {displayedData.serviceVal.toFixed(2)}</span>
           </div>
           <div className="row">
             <span>Peças:</span>
-            <span>R$ {partsVal.toFixed(2)}</span>
+            <span>R$ {displayedData.partsVal.toFixed(2)}</span>
           </div>
         </div>
 
         <div className="total-row">
           <span>TOTAL:</span>
-          <span>R$ {totalVal.toFixed(2)}</span>
+          <span>R$ {displayedData.totalVal.toFixed(2)}</span>
         </div>
 
-        {paymentMethod && (
+        {displayedData.paymentMethod && (
           <div className="section center">
             <span className="label">Forma de Pagamento: </span>
-            <span className="bold">{paymentMethod}</span>
+            <span className="bold">{displayedData.paymentMethod}</span>
           </div>
         )}
 
         <div className="warranty">
-          <div className="bold">GARANTIA: {warrantyDays} DIAS</div>
+          <div className="bold">GARANTIA: {displayedData.warrantyDays} DIAS</div>
           <div style={{ fontSize: "9px", marginTop: "4px" }}>
             Válida apenas para o serviço realizado, mediante apresentação deste comprovante.
             Não cobre mau uso, quedas ou danos elétricos.

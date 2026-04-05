@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useServiceOrders, useCreateServiceOrder, useUpdateServiceOrder } from "@/hooks/use-service-orders";
+import { fetchServiceOrderDeliveryBatches, useServiceOrderDeliveryBatches, useServiceOrders, useCreateServiceOrder, useUpdateServiceOrder } from "@/hooks/use-service-orders";
 import { useCustomers } from "@/hooks/use-customers";
 import { useAppliances } from "@/hooks/use-appliances";
 import { Button } from "@/components/ui/button";
@@ -137,16 +137,18 @@ export default function Orders() {
     if (!searchTerm) return true;
 
     const search = searchTerm.toLowerCase();
+    const orderItems = getOrderItemsSummary(order);
 
     return (
       (order.orderNumber || "").toLowerCase().includes(search) ||
       (order.customer.name || "").toLowerCase().includes(search) ||
       (order.customer.phone || "").toLowerCase().includes(search) ||
-      getOrderItemsSummary(order, appliances).some((item) =>
+      orderItems.some((item) =>
         [
           item.appliance?.type,
           item.appliance?.brand,
           item.appliance?.model,
+          item.appliance?.serialNumber,
           item.defect,
         ].some((value) => (value || "").toLowerCase().includes(search))
       ) ||
@@ -209,7 +211,7 @@ export default function Orders() {
             </div>
           ) : (
             filteredOrders?.map((order) => {
-              const orderSummary = getOrderSummaryPreview(order, appliances);
+              const orderSummary = getOrderSummaryPreview(order);
               return (
               <Card 
                 key={order.id} 
@@ -358,8 +360,10 @@ function OrderDetails({ order, appliances, onClose, onFinalize }: { order: any, 
   const { mutate: update, isPending } = useUpdateServiceOrder();
   const { toast } = useToast();
   const { hasPermission, user } = useAuth();
+  const { data: deliveryBatches = [] } = useServiceOrderDeliveryBatches(order.id);
   const [budgetOpen, setBudgetOpen] = useState(true);
   const itemSummaries = getOrderItemsSummary(order, appliances);
+  const isMultiItemOrder = itemSummaries.length > 1;
   const primaryItem = itemSummaries[0];
   const openItems = itemSummaries.filter((item) => !isOrderItemFinalized(item));
   const canTriggerDelivery = openItems.length > 0;
@@ -402,6 +406,7 @@ function OrderDetails({ order, appliances, onClose, onFinalize }: { order: any, 
     const total = (Number(primaryItemState?.serviceValue || 0) + Number(primaryItemState?.partsValue || 0)).toString();
     const finalData = {
       ...data,
+      defect: isMultiItemOrder ? order.defect : data.defect,
       status: primaryItemState?.status || order.status,
       serviceValue: primaryItemState?.serviceValue || "0",
       partsValue: primaryItemState?.partsValue || "0",
@@ -484,7 +489,15 @@ function OrderDetails({ order, appliances, onClose, onFinalize }: { order: any, 
             size="sm" 
             variant="outline"
             className="min-h-10 justify-start text-blue-600"
-            onClick={() => window.open(`/print/exit/${order.id}`, '_blank')}
+            onClick={() => {
+              const latestBatch = deliveryBatches[0];
+              window.open(
+                latestBatch
+                  ? `/print/exit/${order.id}?batchId=${latestBatch.id}`
+                  : `/print/exit/${order.id}`,
+                '_blank',
+              );
+            }}
           >
             <Printer className="w-4 h-4 mr-2" /> Nota de Saída
           </Button>
@@ -516,6 +529,88 @@ function OrderDetails({ order, appliances, onClose, onFinalize }: { order: any, 
 
       <Separator />
 
+      {deliveryBatches.length > 0 && (
+        <>
+          <div className="space-y-3 py-2">
+            <div>
+              <p className="text-sm font-medium">Histórico de saídas</p>
+              <p className="text-xs text-muted-foreground">
+                Reimpressão baseada no lote persistido de cada entrega.
+              </p>
+            </div>
+            <div className="space-y-2">
+              {deliveryBatches.map((batch) => (
+                <div key={batch.id} className="space-y-3 rounded-lg border p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">
+                          {batch.isPartial ? "Saída parcial" : "Saída total"}
+                        </Badge>
+                        <span className="text-sm font-medium">
+                          {format(new Date(batch.deliveredAt), "dd/MM/yyyy HH:mm")}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {batch.items.length} item(ns) • Responsável: {batch.finalizedBy}
+                      </p>
+                      {batch.deliveredTo && (
+                        <p className="text-sm">
+                          <span className="text-muted-foreground">Entregue para:</span> {batch.deliveredTo}
+                        </p>
+                      )}
+                      {batch.paymentMethod && (
+                        <p className="text-sm">
+                          <span className="text-muted-foreground">Pagamento:</span> {batch.paymentMethod}
+                        </p>
+                      )}
+                      {batch.finalNotes && (
+                        <p className="text-sm whitespace-pre-wrap">
+                          <span className="text-muted-foreground">Observações finais:</span> {batch.finalNotes}
+                        </p>
+                      )}
+                    </div>
+                    <div className="shrink-0">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => window.open(`/print/exit/${order.id}?batchId=${batch.id}`, "_blank")}
+                      >
+                        <Printer className="w-4 h-4 mr-2" /> Reimprimir
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 rounded-md bg-muted/30 p-3">
+                    <p className="text-xs font-medium text-muted-foreground">Itens desta saída</p>
+                    {batch.items.map((item) => (
+                      <div key={item.id} className="text-sm">
+                        <p className="font-medium">
+                          Item {item.itemNumberSnapshot}: {[item.applianceTypeSnapshot, item.applianceBrandSnapshot, item.applianceModelSnapshot].filter(Boolean).join(" ")}
+                        </p>
+                        {item.applianceSerialNumberSnapshot && (
+                          <p className="text-muted-foreground">Série: {item.applianceSerialNumberSnapshot}</p>
+                        )}
+                        <p className="text-muted-foreground">{item.defectSnapshot}</p>
+                        {(item.diagnosisSnapshot || item.partsDescriptionSnapshot) && (
+                          <p className="text-muted-foreground whitespace-pre-wrap">
+                            {[item.diagnosisSnapshot, item.partsDescriptionSnapshot].filter(Boolean).join("\n")}
+                          </p>
+                        )}
+                        <p className="text-muted-foreground">
+                          Mão de obra: R$ {Number(item.serviceValueSnapshot ?? 0).toFixed(2)} | Peças: R$ {Number(item.partsValueSnapshot ?? 0).toFixed(2)} | Total: R$ {Number(item.totalValueSnapshot ?? 0).toFixed(2)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <Separator />
+        </>
+      )}
+
       {/* Customer & Appliance Info */}
       <div className="grid grid-cols-1 gap-4 py-2 text-sm sm:grid-cols-2">
         <div>
@@ -541,18 +636,35 @@ function OrderDetails({ order, appliances, onClose, onFinalize }: { order: any, 
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-2">
-          <FormField
-            control={form.control}
-            name="defect"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Defeito Relatado</FormLabel>
-                <FormControl>
-                  <Textarea {...field} disabled={isFinalized} />
-                </FormControl>
-              </FormItem>
-            )}
-          />
+          {isMultiItemOrder ? (
+            <div className="space-y-2 rounded-lg border border-dashed p-4">
+              <p className="text-sm font-medium">Defeitos relatados por item</p>
+              <p className="text-xs text-muted-foreground">
+                Em OS com multiplos aparelhos, o defeito deve ser mantido apenas no bloco de cada item para evitar edicao ambigua.
+              </p>
+              <div className="space-y-2 text-sm">
+                {itemSummaries.map((item) => (
+                  <div key={item.itemNumber}>
+                    <p className="font-medium">Item {item.itemNumber}: {item.applianceLabel}</p>
+                    <p className="text-muted-foreground">{item.defect}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <FormField
+              control={form.control}
+              name="defect"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Defeito Relatado</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} disabled={isFinalized} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          )}
 
           <div className="space-y-4">
             <FormLabel>Bloco Técnico/Comercial por Item</FormLabel>
@@ -881,7 +993,7 @@ function FinalizationForm({ order, onClose }: { order: any, onClose: () => void 
   const [warrantyDays, setWarrantyDays] = useState(order.warrantyDays?.toString() || "90");
   const [finalizationSuccess, setFinalizationSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [lastPrintedItemNumbers, setLastPrintedItemNumbers] = useState<number[]>([]);
+  const [lastPrintedBatchId, setLastPrintedBatchId] = useState<number | null>(null);
   const [selectedItemNumbers, setSelectedItemNumbers] = useState<number[]>(
     openItems.length ? openItems.map((item) => item.itemNumber) : itemSummaries.map((item) => item.itemNumber)
   );
@@ -909,9 +1021,6 @@ function FinalizationForm({ order, onClose }: { order: any, onClose: () => void 
       setErrorMessage("Selecione ao menos um item para registrar a saída.");
       return;
     }
-
-    const selectedItemsParam = selectedItems.map((item) => item.itemNumber);
-
     update(isLegacySingleItem ? {
       id: order.id,
       status: finalStatus === "ENTREGUE" ? "Entregue" : order.status,
@@ -958,11 +1067,15 @@ function FinalizationForm({ order, onClose }: { order: any, onClose: () => void 
             ? `Status: ${getStatusLabel(finalStatus)}`
             : `${selectedItems.length} item(ns) entregue(s) nesta saída`
         });
-        setLastPrintedItemNumbers(selectedItemsParam);
+        const batches = await fetchServiceOrderDeliveryBatches(order.id);
+        const latestBatch = batches[0] ?? null;
+        setLastPrintedBatchId(latestBatch?.id ?? null);
         setFinalizationSuccess(true);
-        setTimeout(() => {
-          window.open(`/print/exit/${order.id}?items=${selectedItemsParam.join(",")}`, "_blank");
-        }, 150);
+        if (latestBatch) {
+          setTimeout(() => {
+            window.open(`/print/exit/${order.id}?batchId=${latestBatch.id}`, "_blank");
+          }, 150);
+        }
       },
       onError: (error) => {
         const message = error instanceof Error ? error.message : "Erro desconhecido ao finalizar";
@@ -993,7 +1106,8 @@ function FinalizationForm({ order, onClose }: { order: any, onClose: () => void 
             <Button
               className="w-full"
               variant="outline"
-              onClick={() => window.open(`/print/exit/${order.id}?items=${lastPrintedItemNumbers.join(",")}`, "_blank")}
+              onClick={() => lastPrintedBatchId && window.open(`/print/exit/${order.id}?batchId=${lastPrintedBatchId}`, "_blank")}
+              disabled={!lastPrintedBatchId}
             >
               <Printer className="w-4 h-4 mr-2" /> Imprimir Nota de Saída (Térmica)
             </Button>

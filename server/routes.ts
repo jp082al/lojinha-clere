@@ -129,6 +129,24 @@ export async function registerRoutes(
     res.json(order);
   });
 
+  app.get(api.serviceOrders.deliveryBatches.path, isAuthenticated, async (req, res) => {
+    const order = await storage.getServiceOrder(Number(req.params.id));
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const batches = await storage.getServiceOrderDeliveryBatches(Number(req.params.id));
+    res.json(batches);
+  });
+
+  app.get(api.serviceOrders.deliveryBatch.path, isAuthenticated, async (req, res) => {
+    const batch = await storage.getServiceOrderDeliveryBatch(Number(req.params.id), Number(req.params.batchId));
+    if (!batch) {
+      return res.status(404).json({ message: 'Delivery batch not found' });
+    }
+    res.json(batch);
+  });
+
   app.post(api.serviceOrders.create.path, isAuthenticated, async (req, res) => {
     try {
       const input = api.serviceOrders.create.input.parse(req.body);

@@ -22,6 +22,7 @@ type LegacyOrderLike = {
     id?: number | null;
     itemNumber?: number | null;
     applianceId?: number | null;
+    appliance?: ApplianceCatalogEntry | null;
     defect?: string | null;
     observations?: string | null;
     diagnosis?: string | null;
@@ -37,6 +38,10 @@ type LegacyOrderLike = {
     deliveredTo?: string | null;
     finalNotes?: string | null;
   }> | null;
+};
+
+type OrderItemsSummaryOptions = {
+  strictItemFields?: boolean;
 };
 
 type ApplianceCatalogEntry = {
@@ -85,6 +90,10 @@ export function isOrderItemFinalized(item: {
 }
 
 export function getOrderItemAppliance(order: LegacyOrderLike, item: ReturnType<typeof getOrderItems>[number], appliancesById?: Map<number, ApplianceCatalogEntry>) {
+  if (item.appliance) {
+    return item.appliance;
+  }
+
   if (item.applianceId && appliancesById?.has(item.applianceId)) {
     return appliancesById.get(item.applianceId) ?? null;
   }
@@ -103,8 +112,17 @@ export function formatApplianceLabel(appliance?: {
 }
 
 export function getOrderItemsSummary(order: LegacyOrderLike, appliances: ApplianceCatalogEntry[] = []) {
+  return getOrderItemsSummaryWithOptions(order, appliances);
+}
+
+export function getOrderItemsSummaryWithOptions(
+  order: LegacyOrderLike,
+  appliances: ApplianceCatalogEntry[] = [],
+  options: OrderItemsSummaryOptions = {},
+) {
   const items = getOrderItems(order);
   const appliancesById = new Map(appliances.map((appliance) => [appliance.id, appliance]));
+  const useStrictItemFields = Boolean(options.strictItemFields && order.items?.length);
 
   return items.map((item, index) => {
     const appliance = getOrderItemAppliance(order, item, appliancesById);
@@ -114,20 +132,20 @@ export function getOrderItemsSummary(order: LegacyOrderLike, appliances: Applian
       itemNumber: item.itemNumber ?? index + 1,
       appliance,
       applianceLabel: formatApplianceLabel(appliance),
-      defect: item.defect ?? order.defect ?? "",
-      observations: item.observations ?? order.observations ?? null,
-      diagnosis: item.diagnosis ?? order.diagnosis ?? null,
+      defect: useStrictItemFields ? (item.defect ?? "") : (item.defect ?? order.defect ?? ""),
+      observations: useStrictItemFields ? (item.observations ?? null) : (item.observations ?? order.observations ?? null),
+      diagnosis: useStrictItemFields ? (item.diagnosis ?? null) : (item.diagnosis ?? order.diagnosis ?? null),
       status: item.status ?? null,
-      partsDescription: item.partsDescription ?? order.partsDescription ?? null,
+      partsDescription: useStrictItemFields ? (item.partsDescription ?? null) : (item.partsDescription ?? order.partsDescription ?? null),
       serviceValue: Number(item.serviceValue ?? 0),
       partsValue: Number(item.partsValue ?? 0),
       totalValue: Number(item.totalValue ?? (Number(item.serviceValue ?? 0) + Number(item.partsValue ?? 0))),
       warrantyDays: item.warrantyDays ?? order.warrantyDays ?? null,
-      exitDate: item.exitDate ?? order.exitDate ?? null,
-      finalStatus: item.finalStatus ?? order.finalStatus ?? null,
-      finalizedBy: item.finalizedBy ?? order.finalizedBy ?? null,
-      deliveredTo: item.deliveredTo ?? order.deliveredTo ?? null,
-      finalNotes: item.finalNotes ?? order.finalNotes ?? null,
+      exitDate: useStrictItemFields ? (item.exitDate ?? null) : (item.exitDate ?? order.exitDate ?? null),
+      finalStatus: useStrictItemFields ? (item.finalStatus ?? null) : (item.finalStatus ?? order.finalStatus ?? null),
+      finalizedBy: useStrictItemFields ? (item.finalizedBy ?? null) : (item.finalizedBy ?? order.finalizedBy ?? null),
+      deliveredTo: useStrictItemFields ? (item.deliveredTo ?? null) : (item.deliveredTo ?? order.deliveredTo ?? null),
+      finalNotes: useStrictItemFields ? (item.finalNotes ?? null) : (item.finalNotes ?? order.finalNotes ?? null),
     };
   });
 }

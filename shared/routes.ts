@@ -6,6 +6,7 @@ import {
   customers,
   appliances,
   serviceOrders,
+  type ServiceOrderDeliveryBatchWithItems,
   type ServiceOrderWithRelations,
 } from './schema';
 
@@ -209,6 +210,22 @@ export const api = {
       responses: {
         200: z.custom<typeof serviceOrders.$inferSelect>(),
         400: errorSchemas.validation,
+        404: errorSchemas.notFound,
+      },
+    },
+    deliveryBatches: {
+      method: 'GET' as const,
+      path: '/api/service-orders/:id/delivery-batches',
+      responses: {
+        200: z.array(z.custom<ServiceOrderDeliveryBatchWithItems>()),
+        404: errorSchemas.notFound,
+      },
+    },
+    deliveryBatch: {
+      method: 'GET' as const,
+      path: '/api/service-orders/:id/delivery-batches/:batchId',
+      responses: {
+        200: z.custom<ServiceOrderDeliveryBatchWithItems>(),
         404: errorSchemas.notFound,
       },
     },
