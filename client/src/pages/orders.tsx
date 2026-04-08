@@ -184,7 +184,7 @@ export default function Orders() {
           />
         </div>
         
-        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:px-0 sm:pb-0">
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
           {(Object.keys(TAB_LABELS) as OrderTab[]).map((tab) => (
             <Button
               key={tab}
@@ -326,7 +326,7 @@ export default function Orders() {
 
       {/* Edit/Details Dialog */}
       <Dialog open={!!editingOrder} onOpenChange={(open) => !open && setEditingOrder(null)}>
-        <DialogContent className="max-h-[90vh] max-w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-2xl">
           {editingOrder && (
             <OrderDetails 
               order={editingOrder} 

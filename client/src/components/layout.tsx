@@ -61,7 +61,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const roleInfo = ROLE_LABELS[user?.role || ""] || { label: user?.role, color: "bg-gray-100 text-gray-700" };
 
   const Sidebar = () => (
-    <div className="h-full flex flex-col bg-card border-r border-border">
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-card border-r border-border">
       <div className="p-6">
         <div className="flex items-center gap-2">
           {settings?.logoUrl && (
@@ -194,7 +194,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </SheetContent>
       </Sheet>
 
-      <main className="flex-1 overflow-y-auto p-3 pt-16 sm:p-4 sm:pt-20 md:ml-64 md:p-8 md:pt-8">
+      <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-3 pt-16 sm:p-4 sm:pt-20 md:ml-64 md:p-8 md:pt-8">
         <div className="mx-auto max-w-7xl space-y-6 animate-in fade-in duration-500 md:space-y-8">
           {children}
         </div>

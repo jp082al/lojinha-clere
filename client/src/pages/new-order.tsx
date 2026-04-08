@@ -379,7 +379,7 @@ export default function NewOrder() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 sm:space-y-6">
+    <div className="mx-auto max-w-3xl space-y-5 overflow-x-hidden sm:space-y-6">
       <div className="space-y-2">
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Nova Ordem de Serviço</h1>
         <p className="text-muted-foreground">Registre um novo serviço de forma rápida e simples.</p>
